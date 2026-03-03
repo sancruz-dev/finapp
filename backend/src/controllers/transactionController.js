@@ -80,7 +80,7 @@ exports.summary = async (req, res) => {
        WHERE user_id = ? AND MONTH(date) = ? AND YEAR(date) = ?`,
       [req.user.id, month, year]
     );
-    // Gastos por categoria
+
     const [byCategory] = await db.query(
       `SELECT c.name, c.color, SUM(t.amount) as total
        FROM transactions t
@@ -89,7 +89,20 @@ exports.summary = async (req, res) => {
        GROUP BY c.id ORDER BY total DESC`,
       [req.user.id, month, year]
     );
-    res.json({ ...rows[0], by_category: byCategory });
+
+    const summary = rows[0];
+
+    // mysql2 retorna DECIMAL como string — converter para número
+    // para que o Recharts consiga renderizar os gráficos corretamente
+    res.json({
+      total_income: parseFloat(summary.total_income || 0),
+      total_expense: parseFloat(summary.total_expense || 0),
+      balance: parseFloat(summary.balance || 0),
+      by_category: byCategory.map(c => ({
+        ...c,
+        total: parseFloat(c.total),
+      })),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

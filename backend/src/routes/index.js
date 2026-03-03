@@ -13,8 +13,8 @@ router.post('/auth/register', authCtrl.register);
 router.get('/transactions', auth, txCtrl.list);
 router.post('/transactions', auth, txCtrl.create);
 router.put('/transactions/:id', auth, txCtrl.update);
-router.delete('/transactions/:id', auth, txCtrl.remove);
 router.get('/transactions/summary', auth, txCtrl.summary);
+router.delete('/transactions/:id', auth, txCtrl.remove);
 
 // Categories (protegidas)
 router.get('/categories', auth, catCtrl.list);

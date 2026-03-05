@@ -114,9 +114,14 @@ public class TransactionService(DbConnectionFactory db)
 
         var totals = await conn.QueryFirstAsync(@"
             SELECT
-              SUM(CASE WHEN type = 'income'  THEN amount ELSE 0      END) AS total_income,
-              SUM(CASE WHEN type = 'expense' THEN amount ELSE 0      END) AS total_expense,
-              SUM(CASE WHEN type = 'income'  THEN amount ELSE -amount END) AS balance
+              SUM(CASE WHEN type = 'income'  THEN amount ELSE 0 END) AS total_income,
+              SUM(CASE WHEN type = 'expense' THEN amount
+                       WHEN type = 'refund'  THEN -amount
+                       ELSE 0 END)                                   AS total_expense,
+              SUM(CASE WHEN type = 'income'  THEN  amount
+                       WHEN type = 'expense' THEN -amount
+                       WHEN type = 'refund'  THEN  amount
+                       ELSE 0 END)                                   AS balance
             FROM transactions
             WHERE user_id = @UserId
               AND MONTH(date) = @Month

@@ -19,7 +19,10 @@ export default function TransactionModal({ initial, onSave, onClose }) {
     categoryService.list().then(res => setCategories(res.data));
   }, []);
 
-  const filtered = categories.filter(c => c.type === form.type);
+  // Reembolso usa categorias de despesa (é um desconto de despesa)
+  const filtered = categories.filter(c =>
+    form.type === 'refund' ? c.type === 'expense' : c.type === form.type
+  );
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -28,7 +31,16 @@ export default function TransactionModal({ initial, onSave, onClose }) {
     onSave({ ...form, amount: parseFloat(form.amount) });
   };
 
-  const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 };
+  const typeConfig = {
+    expense: { label: '- Despesa',    border: '#ef4444', bg: '#fef2f2', color: '#ef4444' },
+    refund:  { label: '↩ Reembolso',  border: '#6366f1', bg: '#eef2ff', color: '#6366f1' },
+    income:  { label: '+ Receita',    border: '#22c55e', bg: '#f0fdf4', color: '#22c55e' },
+  };
+
+  const overlay = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+  };
   const box = { background: '#fff', borderRadius: 12, padding: '2rem', width: 480, maxWidth: '95vw' };
 
   return (
@@ -38,36 +50,51 @@ export default function TransactionModal({ initial, onSave, onClose }) {
           <h3 style={{ margin: 0 }}>{initial ? 'Editar' : 'Nova'} Transação</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer' }}>✕</button>
         </div>
+
         <form onSubmit={handleSubmit}>
-          {/* Tipo */}
+          {/* Tipo — três opções */}
           <div style={{ display: 'flex', gap: 8, marginBottom: '1rem' }}>
-            {['expense', 'income'].map(t => (
-              <button key={t} type="button" onClick={() => set('type', t)}
-                style={{ flex: 1, padding: '10px', borderRadius: 8, cursor: 'pointer', fontWeight: 600, border: '2px solid',
-                  borderColor: form.type === t ? (t === 'income' ? '#22c55e' : '#ef4444') : '#e2e8f0',
-                  background: form.type === t ? (t === 'income' ? '#f0fdf4' : '#fef2f2') : '#fff',
-                  color: form.type === t ? (t === 'income' ? '#22c55e' : '#ef4444') : '#64748b' }}>
-                {t === 'income' ? '+ Receita' : '- Despesa'}
-              </button>
-            ))}
+            {['expense', 'refund', 'income'].map(t => {
+              const cfg = typeConfig[t];
+              const active = form.type === t;
+              return (
+                <button key={t} type="button" onClick={() => set('type', t)}
+                  style={{
+                    flex: 1, padding: '10px', borderRadius: 8, cursor: 'pointer',
+                    fontWeight: 600, border: '2px solid', fontSize: '0.82rem',
+                    borderColor: active ? cfg.border : '#e2e8f0',
+                    background:  active ? cfg.bg    : '#fff',
+                    color:       active ? cfg.color : '#64748b',
+                  }}>
+                  {cfg.label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Campos */}
           {[
-            { label: 'Descrição', key: 'description', type: 'text', required: true },
-            { label: 'Valor (R$)', key: 'amount', type: 'number', required: true, step: '0.01', min: '0.01' },
-            { label: 'Data', key: 'date', type: 'date', required: true },
+            { label: 'Descrição', key: 'description', type: 'text',   required: true },
+            { label: 'Valor (R$)', key: 'amount',     type: 'number', required: true, step: '0.01', min: '0.01' },
+            { label: 'Data',       key: 'date',        type: 'date',   required: true },
           ].map(({ label, key, ...props }) => (
             <div key={key} style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>{label}</label>
               <input {...props} value={form[key]} onChange={e => set(key, e.target.value)}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '1rem' }} />
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '1rem', boxSizing: 'border-box' }} />
             </div>
           ))}
 
           {/* Categoria */}
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Categoria</label>
+            <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>
+              Categoria
+              {form.type === 'refund' && (
+                <span style={{ marginLeft: 6, fontSize: '0.75rem', color: '#6366f1', fontWeight: 400 }}>
+                  (categoria da despesa reembolsada)
+                </span>
+              )}
+            </label>
             <select value={form.category_id} onChange={e => set('category_id', e.target.value)}
               style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '1rem' }}>
               <option value="">Sem categoria</option>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
 import {
@@ -15,7 +16,6 @@ dayjs.locale('pt-br');
 const fmt = (v) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-// ─── Legenda customizada para o PieChart ────────────────────────────────────
 const CustomLegend = ({ payload }) => (
   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center', marginTop: 8 }}>
     {payload.map((entry, i) => (
@@ -27,21 +27,27 @@ const CustomLegend = ({ payload }) => (
   </div>
 );
 
+// Configuração visual por tipo de transação
+const TYPE_CONFIG = {
+  income:  { label: 'Receita',   color: '#22c55e', sign: '+' },
+  expense: { label: 'Despesa',   color: '#ef4444', sign: '-' },
+  refund:  { label: 'Reembolso', color: '#6366f1', sign: '↩' },
+};
+
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const [date, setDate] = useState(dayjs());
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
+  const navigate = useNavigate();
 
-  // ── Filtros ────────────────────────────────────────────────────────────────
-  const [filterType, setFilterType] = useState('');       // '' | 'income' | 'expense'
-  const [filterCategory, setFilterCategory] = useState(''); // '' | category_id (string)
+  const [filterType, setFilterType] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
 
   const { transactions, summary, loading, add, update, remove } = useTransactions(
     date.month() + 1, date.year()
   );
 
-  // ── Helpers de modal ───────────────────────────────────────────────────────
   const handleSave = async (data) => {
     if (editing) { await update(editing.id, data); setEditing(null); }
     else await add(data);
@@ -50,14 +56,12 @@ export default function Dashboard() {
   const handleEdit = (tx) => { setEditing(tx); setShowModal(true); };
   const handleDelete = async (id) => { if (window.confirm('Remover esta transação?')) await remove(id); };
 
-  // ── Filtro local nas transações listadas ───────────────────────────────────
   const filtered = transactions.filter(tx => {
     if (filterType && tx.type !== filterType) return false;
     if (filterCategory && String(tx.category_id) !== filterCategory) return false;
     return true;
   });
 
-  // Categorias únicas presentes no mês para o select de filtro
   const uniqueCategories = Array.from(
     new Map(
       transactions
@@ -66,7 +70,6 @@ export default function Dashboard() {
     ).values()
   );
 
-  // ── Estilos ────────────────────────────────────────────────────────────────
   const s = {
     page: { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', system-ui, sans-serif" },
     header: {
@@ -89,7 +92,6 @@ export default function Dashboard() {
 
   return (
     <div style={s.page}>
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header style={s.header}>
         <span style={{ fontWeight: 700, fontSize: '1.1rem', letterSpacing: '-0.3px' }}>💰 FinApp</span>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -101,7 +103,7 @@ export default function Dashboard() {
       </header>
 
       <main style={s.main}>
-        {/* ── Navegação de mês ─────────────────────────────────────────────── */}
+        {/* Navegação de mês */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button onClick={() => setDate(d => d.subtract(1, 'month'))} style={s.btn('#fff', '#334155')}>‹</button>
@@ -110,17 +112,22 @@ export default function Dashboard() {
             </strong>
             <button onClick={() => setDate(d => d.add(1, 'month'))} style={s.btn('#fff', '#334155')}>›</button>
           </div>
-          <button onClick={() => { setEditing(null); setShowModal(true); }} style={s.btn()}>
-            + Nova transação
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => { setEditing(null); setShowModal(true); }} style={s.btn()}>
+              + Nova transação
+            </button>
+            <button onClick={() => navigate('/import')} style={s.btn('#818cf8')}>
+              📥 Importar CSV
+            </button>
+          </div>
         </div>
 
-        {/* ── Cards de resumo ──────────────────────────────────────────────── */}
+        {/* Cards de resumo */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.75rem' }}>
           {[
-            { label: 'Receitas', value: summary?.total_income, color: '#22c55e', bg: '#f0fdf4', border: '#bbf7d0' },
+            { label: 'Receitas', value: summary?.total_income,  color: '#22c55e', bg: '#f0fdf4', border: '#bbf7d0' },
             { label: 'Despesas', value: summary?.total_expense, color: '#ef4444', bg: '#fef2f2', border: '#fecaca' },
-            { label: 'Saldo', value: summary?.balance, color: '#6366f1', bg: '#eef2ff', border: '#c7d2fe' },
+            { label: 'Saldo',    value: summary?.balance,       color: '#6366f1', bg: '#eef2ff', border: '#c7d2fe' },
           ].map(({ label, value, color, bg, border }) => (
             <div key={label} style={{ ...s.card, padding: '1.25rem 1.5rem', background: bg, border: `1px solid ${border}` }}>
               <p style={{ margin: 0, color: '#64748b', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</p>
@@ -129,29 +136,16 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* ── Gráficos ─────────────────────────────────────────────────────── */}
+        {/* Gráficos */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.75rem' }}>
-
-          {/* Pizza — Gastos por Categoria */}
           <div style={{ ...s.card, padding: '1.5rem' }}>
             <h3 style={{ margin: '0 0 1rem', fontSize: '0.95rem', color: '#1e293b' }}>Gastos por Categoria</h3>
             {summary?.by_category?.length > 0 ? (
-              /* height fixo no wrapper resolve o problema de renderização do PieChart */
               <div style={{ width: '100%', height: 220 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie
-                      data={summary.by_category}
-                      dataKey="total"
-                      nameKey="name"
-                      cx="50%"
-                      cy="45%"
-                      outerRadius={80}
-                      strokeWidth={2}
-                    >
-                      {summary.by_category.map((c, i) => (
-                        <Cell key={i} fill={c.color} stroke={c.color} />
-                      ))}
+                    <Pie data={summary.by_category} dataKey="total" nameKey="name" cx="50%" cy="45%" outerRadius={80} strokeWidth={2}>
+                      {summary.by_category.map((c, i) => <Cell key={i} fill={c.color} stroke={c.color} />)}
                     </Pie>
                     <Tooltip formatter={(v) => fmt(v)} />
                     <Legend content={<CustomLegend />} />
@@ -165,7 +159,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Barras — Receitas vs Despesas */}
           <div style={{ ...s.card, padding: '1.5rem' }}>
             <h3 style={{ margin: '0 0 1rem', fontSize: '0.95rem', color: '#1e293b' }}>Receitas vs Despesas</h3>
             <div style={{ width: '100%', height: 220 }}>
@@ -173,7 +166,7 @@ export default function Dashboard() {
                 <BarChart
                   data={[{
                     name: date.format('MMM'),
-                    Receitas: parseFloat(summary?.total_income || 0),
+                    Receitas: parseFloat(summary?.total_income  || 0),
                     Despesas: parseFloat(summary?.total_expense || 0),
                   }]}
                   margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
@@ -191,17 +184,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── Lista de transações ───────────────────────────────────────────── */}
+        {/* Lista de transações */}
         <div style={s.card}>
-          {/* Cabeçalho + filtros */}
           <div style={{
-            padding: '1rem 1.5rem',
-            borderBottom: '1px solid #f1f5f9',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: 10,
+            padding: '1rem 1.5rem', borderBottom: '1px solid #f1f5f9',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            flexWrap: 'wrap', gap: 10,
           }}>
             <h3 style={{ margin: 0, fontSize: '0.95rem', color: '#1e293b' }}>
               Transações
@@ -212,16 +200,14 @@ export default function Dashboard() {
               )}
             </h3>
 
-            {/* Controles de filtro */}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              {/* Filtro por tipo */}
               <select value={filterType} onChange={e => setFilterType(e.target.value)} style={s.select}>
                 <option value="">Todos os tipos</option>
                 <option value="income">Receitas</option>
                 <option value="expense">Despesas</option>
+                <option value="refund">Reembolsos</option>
               </select>
 
-              {/* Filtro por categoria */}
               <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} style={s.select}>
                 <option value="">Todas as categorias</option>
                 {uniqueCategories.map(c => (
@@ -229,70 +215,73 @@ export default function Dashboard() {
                 ))}
               </select>
 
-              {/* Limpar filtros */}
               {(filterType || filterCategory) && (
-                <button
-                  onClick={() => { setFilterType(''); setFilterCategory(''); }}
-                  style={{ ...s.btn('#f1f5f9', '#64748b'), fontWeight: 500 }}
-                >
+                <button onClick={() => { setFilterType(''); setFilterCategory(''); }}
+                  style={{ ...s.btn('#f1f5f9', '#64748b'), fontWeight: 500 }}>
                   ✕ Limpar
                 </button>
               )}
             </div>
           </div>
 
-          {/* Linhas */}
           {loading ? (
             <p style={{ textAlign: 'center', padding: '2.5rem', color: '#94a3b8' }}>Carregando...</p>
           ) : filtered.length === 0 ? (
             <p style={{ textAlign: 'center', padding: '2.5rem', color: '#94a3b8' }}>
               {transactions.length === 0 ? 'Nenhuma transação neste mês' : 'Nenhuma transação para os filtros selecionados'}
             </p>
-          ) : filtered.map((tx, idx) => (
-            <div
-              key={tx.id}
-              style={{
-                display: 'flex', alignItems: 'center', padding: '0.875rem 1.5rem',
-                borderBottom: idx < filtered.length - 1 ? '1px solid #f8fafc' : 'none',
-                gap: 12, transition: 'background 0.15s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
-              {/* Bolinha de categoria */}
-              <div style={{
-                width: 10, height: 10, borderRadius: '50%',
-                background: tx.category_color || '#cbd5e1', flexShrink: 0,
-              }} />
+          ) : filtered.map((tx, idx) => {
+            const typeCfg = TYPE_CONFIG[tx.type] ?? TYPE_CONFIG.expense;
+            return (
+              <div
+                key={tx.id}
+                style={{
+                  display: 'flex', alignItems: 'center', padding: '0.875rem 1.5rem',
+                  borderBottom: idx < filtered.length - 1 ? '1px solid #f8fafc' : 'none',
+                  gap: 12, transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                {/* Bolinha de categoria */}
+                <div style={{
+                  width: 10, height: 10, borderRadius: '50%',
+                  background: tx.category_color || '#cbd5e1', flexShrink: 0,
+                }} />
 
-              {/* Descrição */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {tx.description}
-                </p>
-                <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8', marginTop: 2 }}>
-                  {tx.category_name || 'Sem categoria'} · {dayjs(tx.date).format('DD/MM/YYYY')}
-                </p>
+                {/* Descrição + meta */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {tx.description}
+                  </p>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8', marginTop: 2 }}>
+                    {tx.category_name || 'Sem categoria'} · {dayjs(tx.date).format('DD/MM/YYYY')}
+                  </p>
+                </div>
+
+                {/* Badge de tipo para reembolso */}
+                {tx.type === 'refund' && (
+                  <span style={{
+                    fontSize: '0.7rem', background: '#eef2ff', color: '#6366f1',
+                    borderRadius: 20, padding: '2px 8px', fontWeight: 700, whiteSpace: 'nowrap',
+                  }}>
+                    ↩ Reembolso
+                  </span>
+                )}
+
+                {/* Valor */}
+                <span style={{ fontWeight: 700, fontSize: '0.95rem', color: typeCfg.color, whiteSpace: 'nowrap' }}>
+                  {typeCfg.sign}{fmt(tx.amount)}
+                </span>
+
+                {/* Ações */}
+                <button onClick={() => handleEdit(tx)} title="Editar"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6366f1', fontSize: '1rem', padding: '2px 4px', borderRadius: 4 }}>✏️</button>
+                <button onClick={() => handleDelete(tx.id)} title="Remover"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '1rem', padding: '2px 4px', borderRadius: 4 }}>🗑️</button>
               </div>
-
-              {/* Valor */}
-              <span style={{ fontWeight: 700, fontSize: '0.95rem', color: tx.type === 'income' ? '#22c55e' : '#ef4444', whiteSpace: 'nowrap' }}>
-                {tx.type === 'income' ? '+' : '-'}{fmt(tx.amount)}
-              </span>
-
-              {/* Ações */}
-              <button
-                onClick={() => handleEdit(tx)}
-                title="Editar"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6366f1', fontSize: '1rem', padding: '2px 4px', borderRadius: 4 }}
-              >✏️</button>
-              <button
-                onClick={() => handleDelete(tx.id)}
-                title="Remover"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '1rem', padding: '2px 4px', borderRadius: 4 }}
-              >🗑️</button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </main>
 

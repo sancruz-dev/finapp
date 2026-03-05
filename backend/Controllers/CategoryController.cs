@@ -14,23 +14,26 @@ public class CategoryController(CategoryService svc) : ControllerBase
 
     [HttpGet]
     public async Task<IActionResult> List()
-    {
-        var result = await svc.ListAsync(UserId);
-        return Ok(result);
-    }
+        => Ok(await svc.ListAsync(UserId));
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateCategoryRequest req)
-    {
-        var category = await svc.CreateAsync(UserId, req);
-        return StatusCode(201, category);
-    }
+        => StatusCode(201, await svc.CreateAsync(UserId, req));
 
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
+        => await svc.DeleteAsync(id, UserId) ? Ok(new { message = "Removido" }) : NotFound();
+
+    // ── Keywords ───────────────────────────────────────────────────────────
+
+    [HttpPost("{categoryId:int}/keywords")]
+    public async Task<IActionResult> AddKeyword(int categoryId, [FromBody] AddKeywordRequest req)
     {
-        var ok = await svc.DeleteAsync(id, UserId);
-        if (!ok) return NotFound();
-        return Ok(new { message = "Removido com sucesso" });
+        var kw = await svc.AddKeywordAsync(categoryId, UserId, req.Keyword);
+        return kw is null ? NotFound() : StatusCode(201, kw);
     }
+
+    [HttpDelete("keywords/{keywordId:int}")]
+    public async Task<IActionResult> DeleteKeyword(int keywordId)
+        => await svc.DeleteKeywordAsync(keywordId, UserId) ? Ok(new { message = "Removido" }) : NotFound();
 }

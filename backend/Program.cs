@@ -13,7 +13,6 @@ Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Config via .env ────────────────────────────────────────────────────────
 var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "changeme_super_secret_key_here";
 
 // ── Serviços ───────────────────────────────────────────────────────────────
@@ -21,9 +20,10 @@ builder.Services.AddSingleton<DbConnectionFactory>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<CategoryService>();
+builder.Services.AddScoped<ImportService>();       // novo
 builder.Services.AddSingleton<JwtService>();
 
-// ── JSON em snake_case para compatibilidade total com o frontend React ─────
+// ── JSON em snake_case ─────────────────────────────────────────────────────
 builder.Services.AddControllers()
     .AddJsonOptions(opt =>
     {
@@ -41,7 +41,7 @@ builder.Services.AddCors(opt =>
          .AllowAnyHeader()
          .AllowAnyMethod()));
 
-// ── JWT Authentication ─────────────────────────────────────────────────────
+// ── JWT ────────────────────────────────────────────────────────────────────
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>
     {

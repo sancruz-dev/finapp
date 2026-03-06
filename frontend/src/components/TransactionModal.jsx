@@ -11,7 +11,10 @@ export default function TransactionModal({ initial, onSave, onClose }) {
     category_id: '',
     notes: '',
     ...initial,
-    amount: initial?.amount || '',
+    amount: initial?.amount != null ? String(initial.amount) : '',  // amount separado para garantir que string vazia funcione no input
+    date: initial?.date // data: garante formato YYYY-MM-DD (vinda do banco pode ter T00:00:00)
+      ? dayjs(initial.date).format('YYYY-MM-DD')
+      : dayjs().format('YYYY-MM-DD'),
   });
   const [categories, setCategories] = useState([]);
 

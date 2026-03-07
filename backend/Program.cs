@@ -20,7 +20,9 @@ builder.Services.AddSingleton<DbConnectionFactory>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<CategoryService>();
-builder.Services.AddScoped<ImportService>();       // novo
+builder.Services.AddScoped<ImportService>();
+builder.Services.AddScoped<FinancialContextPlugin>();  // novo
+builder.Services.AddScoped<AiService>();               // novo
 builder.Services.AddSingleton<JwtService>();
 
 // ── JSON em snake_case ─────────────────────────────────────────────────────

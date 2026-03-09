@@ -8,19 +8,17 @@ namespace FinApp.Api.Controllers;
 [ApiController]
 [Route("api/ai")]
 [Authorize]
-public class AiController(AiService aiService) : ControllerBase
+public class AiController(AiService aiService, FinancialContextPlugin contextPlugin) : ControllerBase
 {
     private int UserId => int.Parse(User.FindFirst("id")!.Value);
     private string UserName => User.FindFirst("name")?.Value ?? "Usuário";
 
     // ── Chats ──────────────────────────────────────────────────────────────
 
-    /// <summary>Lista todas as conversas do usuário.</summary>
     [HttpGet("chats")]
     public async Task<IActionResult> ListChats()
         => Ok(await aiService.ListChatsAsync(UserId));
 
-    /// <summary>Cria uma nova conversa.</summary>
     [HttpPost("chats")]
     public async Task<IActionResult> CreateChat([FromBody] CreateAiChatRequest req)
     {
@@ -28,7 +26,6 @@ public class AiController(AiService aiService) : ControllerBase
         return StatusCode(201, chat);
     }
 
-    /// <summary>Deleta uma conversa e todas as suas mensagens.</summary>
     [HttpDelete("chats/{id:int}")]
     public async Task<IActionResult> DeleteChat(int id)
         => await aiService.DeleteChatAsync(id, UserId)
@@ -37,12 +34,10 @@ public class AiController(AiService aiService) : ControllerBase
 
     // ── Messages ───────────────────────────────────────────────────────────
 
-    /// <summary>Carrega o histórico de mensagens de uma conversa.</summary>
     [HttpGet("chats/{id:int}/messages")]
     public async Task<IActionResult> GetMessages(int id)
         => Ok(await aiService.GetMessagesAsync(id, UserId));
 
-    /// <summary>Envia uma mensagem e recebe a resposta do assistente.</summary>
     [HttpPost("chats/{id:int}/messages")]
     public async Task<IActionResult> SendMessage(int id, [FromBody] SendAiMessageRequest req)
     {
@@ -58,5 +53,24 @@ public class AiController(AiService aiService) : ControllerBase
         {
             return NotFound(new { error = "Conversa não encontrada." });
         }
+    }
+
+    // ── Debug ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Retorna o system prompt exato e o contexto bruto que seriam enviados ao modelo.
+    /// Use para verificar se os dados financeiros estão corretos antes de culpar o modelo.
+    /// </summary>
+    [HttpGet("debug/context")]
+    public async Task<IActionResult> DebugContext()
+    {
+        var ctx = await contextPlugin.BuildContextAsync(UserId, UserName);
+        var prompt = FinancialContextPlugin.BuildSystemPrompt(ctx);
+        return Ok(new
+        {
+            system_prompt = prompt,
+            raw_context = ctx,
+            generated_at = DateTime.Now,
+        });
     }
 }

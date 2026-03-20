@@ -7,20 +7,30 @@ namespace FinApp.Api.Services;
 
 public class AiService(DbConnectionFactory db, FinancialContextPlugin contextPlugin)
 {
+    // ── Configuração do provedor ───────────────────────────────────────────
+    // AI_PROVIDER=groq  → usa Groq (padrão)
+    // AI_PROVIDER=ollama → usa Ollama local
+    private readonly string _provider =
+        Environment.GetEnvironmentVariable("AI_PROVIDER") ?? "groq";
+
+    private readonly string _groqApiKey =
+        Environment.GetEnvironmentVariable("GROQ_API_KEY") ?? "";
+
+    private readonly string _groqModel =
+        Environment.GetEnvironmentVariable("GROQ_MODEL") ?? "llama-3.1-8b-instant";
+
     private readonly string _ollamaUrl =
         Environment.GetEnvironmentVariable("OLLAMA_URL") ?? "http://localhost:11434";
 
     private readonly string _ollamaModel =
         Environment.GetEnvironmentVariable("OLLAMA_MODEL") ?? "phi3";
 
-    // Opções para serializar o REQUEST ao Ollama — camelCase simples
-    private static readonly JsonSerializerOptions OllamaSerializeOpts = new()
+    // Opções de serialização JSON
+    private static readonly JsonSerializerOptions SerializeOpts = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
-
-    // Opções para deserializar a RESPONSE do Ollama — case-insensitive
-    private static readonly JsonSerializerOptions OllamaDeserializeOpts = new()
+    private static readonly JsonSerializerOptions DeserializeOpts = new()
     {
         PropertyNameCaseInsensitive = true,
     };
@@ -53,8 +63,8 @@ public class AiService(DbConnectionFactory db, FinancialContextPlugin contextPlu
     public async Task<bool> DeleteChatAsync(int chatId, int userId)
     {
         using var conn = db.Create();
-        var rows = await conn.ExecuteAsync(@"
-            DELETE FROM ai_chats WHERE id = @Id AND user_id = @UserId",
+        var rows = await conn.ExecuteAsync(
+            "DELETE FROM ai_chats WHERE id = @Id AND user_id = @UserId",
             new { Id = chatId, UserId = userId });
         return rows > 0;
     }
@@ -65,7 +75,6 @@ public class AiService(DbConnectionFactory db, FinancialContextPlugin contextPlu
     {
         using var conn = db.Create();
 
-        // Verifica que o chat pertence ao usuário
         var owns = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM ai_chats WHERE id = @Id AND user_id = @UserId",
             new { Id = chatId, UserId = userId });
@@ -74,22 +83,16 @@ public class AiService(DbConnectionFactory db, FinancialContextPlugin contextPlu
         return await conn.QueryAsync<AiMessage>(@"
             SELECT id, chat_id, role, content, created_at
             FROM ai_messages
-            WHERE chat_id = @ChatId
-              AND role != 'system'
+            WHERE chat_id = @ChatId AND role != 'system'
             ORDER BY created_at ASC",
             new { ChatId = chatId });
     }
 
-    /// <summary>
-    /// Recebe a mensagem do usuário, chama o Ollama com contexto financeiro completo
-    /// e persiste tanto a mensagem do usuário quanto a resposta do assistente.
-    /// </summary>
     public async Task<AiMessage> SendMessageAsync(
         int chatId, int userId, string userName, string userContent)
     {
         using var conn = db.Create();
 
-        // Garante que o chat pertence ao usuário
         var chat = await conn.QueryFirstOrDefaultAsync<AiChat>(
             "SELECT * FROM ai_chats WHERE id = @Id AND user_id = @UserId",
             new { Id = chatId, UserId = userId });
@@ -99,20 +102,20 @@ public class AiService(DbConnectionFactory db, FinancialContextPlugin contextPlu
         var financialContext = await contextPlugin.BuildContextAsync(userId, userName);
         var systemPrompt = FinancialContextPlugin.BuildSystemPrompt(financialContext);
 
-        // 2. Carrega histórico de mensagens da conversa (sem o system)
+        // 2. Carrega histórico
         var history = (await conn.QueryAsync<AiMessage>(@"
             SELECT role, content FROM ai_messages
             WHERE chat_id = @ChatId AND role != 'system'
             ORDER BY created_at ASC",
             new { ChatId = chatId })).ToList();
 
-        // 3. Salva a mensagem do usuário
+        // 3. Salva mensagem do usuário
         await conn.ExecuteAsync(@"
             INSERT INTO ai_messages (chat_id, role, content)
             VALUES (@ChatId, 'user', @Content)",
             new { ChatId = chatId, Content = userContent });
 
-        // 4. Monta o payload para o Ollama
+        // 4. Monta lista de mensagens
         var messages = new List<OllamaMessage>
         {
             new() { Role = "system", Content = systemPrompt }
@@ -124,54 +127,26 @@ public class AiService(DbConnectionFactory db, FinancialContextPlugin contextPlu
         }));
         messages.Add(new OllamaMessage { Role = "user", Content = userContent });
 
-        var ollamaRequest = new OllamaRequest
-        {
-            Model = _ollamaModel,
-            Messages = messages,
-            Stream = false,
-        };
+        // 5. Chama o provedor configurado
+        string assistantContent = _provider.ToLower() == "ollama"
+            ? await CallOllamaAsync(messages)
+            : await CallGroqAsync(messages);
 
-        // 5. Chama o Ollama
-        string assistantContent;
-        try
-        {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
-            var json = JsonSerializer.Serialize(ollamaRequest, OllamaSerializeOpts);
-            var httpContent = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-
-            var response = await http.PostAsync($"{_ollamaUrl}/api/chat", httpContent);
-
-            // Lê o body mesmo em caso de erro para expor a mensagem real do Ollama
-            var responseBody = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
-                throw new Exception($"Ollama retornou {(int)response.StatusCode}: {responseBody}");
-
-            var ollamaResponse = JsonSerializer.Deserialize<OllamaResponse>(responseBody, OllamaDeserializeOpts);
-            assistantContent = ollamaResponse?.Message?.Content
-                ?? "Desculpe, não consegui gerar uma resposta.";
-        }
-        catch (Exception ex)
-        {
-            assistantContent = $"Erro ao conectar com o assistente: {ex.Message}";
-        }
-
-        // 6. Salva a resposta do assistente
+        // 6. Salva resposta do assistente
         var assistantMsgId = await conn.ExecuteScalarAsync<int>(@"
             INSERT INTO ai_messages (chat_id, role, content)
             VALUES (@ChatId, 'assistant', @Content);
             SELECT LAST_INSERT_ID();",
             new { ChatId = chatId, Content = assistantContent });
 
-        // 7. Atualiza o título do chat se ainda for "Nova conversa"
+        // 7. Atualiza título do chat
         if (chat.Title == "Nova conversa")
         {
             var autoTitle = userContent.Length > 50
                 ? userContent[..47] + "..."
                 : userContent;
-            await conn.ExecuteAsync(@"
-                UPDATE ai_chats SET title = @Title, updated_at = NOW()
-                WHERE id = @Id",
+            await conn.ExecuteAsync(
+                "UPDATE ai_chats SET title = @Title, updated_at = NOW() WHERE id = @Id",
                 new { Title = autoTitle, Id = chatId });
         }
         else
@@ -188,5 +163,78 @@ public class AiService(DbConnectionFactory db, FinancialContextPlugin contextPlu
             Role = "assistant",
             Content = assistantContent,
         };
+    }
+
+    // ── Groq ───────────────────────────────────────────────────────────────
+
+    private async Task<string> CallGroqAsync(List<OllamaMessage> messages)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(_groqApiKey))
+                return "Erro: GROQ_API_KEY não configurada no .env.";
+
+            var request = new OllamaRequest
+            {
+                Model = _groqModel,
+                Messages = messages,
+                Stream = false,
+            };
+
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+            http.DefaultRequestHeaders.Add("Authorization", $"Bearer {_groqApiKey}");
+
+            var json = JsonSerializer.Serialize(request, SerializeOpts);
+            var httpContent = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            var response = await http.PostAsync("https://api.groq.com/openai/v1/chat/completions", httpContent);
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+                return $"Erro Groq {(int)response.StatusCode}: {body}";
+
+            // Groq usa formato OpenAI: choices[0].message.content
+            using var doc = JsonDocument.Parse(body);
+            return doc.RootElement
+                       .GetProperty("choices")[0]
+                       .GetProperty("message")
+                       .GetProperty("content")
+                       .GetString()
+                   ?? "Sem resposta.";
+        }
+        catch (Exception ex)
+        {
+            return $"Erro ao conectar com Groq: {ex.Message}";
+        }
+    }
+
+    // ── Ollama (fallback) ──────────────────────────────────────────────────
+
+    private async Task<string> CallOllamaAsync(List<OllamaMessage> messages)
+    {
+        try
+        {
+            var request = new OllamaRequest
+            {
+                Model = _ollamaModel,
+                Messages = messages,
+                Stream = false,
+            };
+
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
+            var json = JsonSerializer.Serialize(request, SerializeOpts);
+            var httpContent = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            var response = await http.PostAsync($"{_ollamaUrl}/api/chat", httpContent);
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+                return $"Erro Ollama {(int)response.StatusCode}: {body}";
+
+            var ollamaResponse = JsonSerializer.Deserialize<OllamaResponse>(body, DeserializeOpts);
+            return ollamaResponse?.Message?.Content ?? "Sem resposta.";
+        }
+        catch (Exception ex)
+        {
+            return $"Erro ao conectar com Ollama: {ex.Message}";
+        }
     }
 }

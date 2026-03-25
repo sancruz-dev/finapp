@@ -17,11 +17,11 @@ public class FinancialContextPlugin(DbConnectionFactory db)
     ];
 
     /// <summary>
-    /// Monta o contexto financeiro completo: mês atual + 12 meses + categorias.
+    /// Monta o contexto financeiro completo: mês atual + 12 meses + categorias + comerciantes.
     /// </summary>
     public async Task<FinancialContext> BuildContextAsync(int userId, string userName)
     {
-        var now = DateTime.Now;
+        var now     = DateTime.Now;
         var context = new FinancialContext { UserName = userName };
 
         // Mês atual
@@ -30,13 +30,16 @@ public class FinancialContextPlugin(DbConnectionFactory db)
         // Últimos 12 meses (excluindo o atual)
         for (int i = 1; i <= 12; i++)
         {
-            var d = now.AddMonths(-i);
+            var d       = now.AddMonths(-i);
             var summary = await GetMonthSummaryAsync(userId, d.Year, d.Month);
             context.Last12Months.Add(summary);
         }
 
         // Categorias ativas do usuário
         context.Categories = await GetCategoriesAsync(userId);
+
+        // Gastos por comerciante — mês atual e últimos 3 meses
+        context.MerchantSpending = await GetMerchantSpendingAsync(userId, now);
 
         return context;
     }
@@ -68,8 +71,8 @@ public class FinancialContextPlugin(DbConnectionFactory db)
               SUM(t.amount) AS total
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
-            WHERE t.user_id  = @UserId
-              AND t.type     = 'expense'
+            WHERE t.user_id     = @UserId
+              AND t.type        = 'expense'
               AND MONTH(t.date) = @Month
               AND YEAR(t.date)  = @Year
             GROUP BY c.id
@@ -84,16 +87,14 @@ public class FinancialContextPlugin(DbConnectionFactory db)
                 ? Math.Round(cat.Total / totalExpense * 100, 1)
                 : 0;
 
-        var monthLabel = $"{MonthNames[month - 1]}/{year}";
-
         return new MonthSummary
         {
-            Month      = $"{year}-{month:D2}",
-            MonthLabel = monthLabel,
-            TotalIncome   = (decimal)totals.total_income,
-            TotalExpense  = totalExpense,
-            Balance       = (decimal)totals.balance,
-            ByCategory    = byCategory,
+            Month        = $"{year}-{month:D2}",
+            MonthLabel   = $"{MonthNames[month - 1]}/{year}",
+            TotalIncome  = (decimal)totals.total_income,
+            TotalExpense = totalExpense,
+            Balance      = (decimal)totals.balance,
+            ByCategory   = byCategory,
         };
     }
 
@@ -107,6 +108,37 @@ public class FinancialContextPlugin(DbConnectionFactory db)
             ORDER BY type, name",
             new { UserId = userId });
         return cats.ToList();
+    }
+
+    /// <summary>
+    /// Busca gastos agrupados por comerciante para os últimos 3 meses + mês atual.
+    /// Só inclui transações que já têm merchant_id resolvido.
+    /// </summary>
+    private async Task<List<MerchantMonthSpending>> GetMerchantSpendingAsync(int userId, DateTime now)
+    {
+        using var conn = db.Create();
+
+        var rows = await conn.QueryAsync<MerchantMonthSpending>(@"
+            SELECT
+                m.name                          AS merchant_name,
+                YEAR(t.date)                    AS year,
+                MONTH(t.date)                   AS month,
+                COUNT(*)                        AS purchase_count,
+                SUM(t.amount)                   AS total_spent
+            FROM transactions t
+            JOIN merchants m ON m.id = t.merchant_id
+            WHERE t.user_id    = @UserId
+              AND t.type       = 'expense'
+              AND t.merchant_id IS NOT NULL
+              AND t.date       >= @Since
+            GROUP BY m.id, m.name, YEAR(t.date), MONTH(t.date)
+            ORDER BY m.name, t.date DESC",
+            new {
+                UserId = userId,
+                Since  = new DateTime(now.Year, now.Month, 1).AddMonths(-3)
+            });
+
+        return rows.ToList();
     }
 
     /// <summary>
@@ -127,10 +159,10 @@ public class FinancialContextPlugin(DbConnectionFactory db)
         sb.AppendLine($"=== DADOS FINANCEIROS DE {ctx.UserName.ToUpper()} ===");
         sb.AppendLine();
 
-        // Mês atual
-        var cm = ctx.CurrentMonth;
-        var today = DateTime.Now;
-        var daysInMonth = DateTime.DaysInMonth(today.Year, today.Month);
+        // ── Mês atual ────────────────────────────────────────────────────────
+        var cm            = ctx.CurrentMonth;
+        var today         = DateTime.Now;
+        var daysInMonth   = DateTime.DaysInMonth(today.Year, today.Month);
         var daysRemaining = daysInMonth - today.Day;
         var dailyBurnRate = today.Day > 0 ? cm.TotalExpense / today.Day : 0;
         var projectedExpense = dailyBurnRate * daysInMonth;
@@ -154,7 +186,7 @@ public class FinancialContextPlugin(DbConnectionFactory db)
             sb.AppendLine();
         }
 
-        // Histórico 12 meses
+        // ── Histórico 12 meses ───────────────────────────────────────────────
         if (ctx.Last12Months.Count > 0)
         {
             sb.AppendLine("--- HISTÓRICO DOS ÚLTIMOS 12 MESES ---");
@@ -182,18 +214,52 @@ public class FinancialContextPlugin(DbConnectionFactory db)
                 sb.AppendLine($"  - Receita média mensal: {fmt(avgIncome)}");
                 sb.AppendLine($"  - Saldo médio mensal:   {fmt(avgBalance)}");
 
-                // Variação do mês atual vs média
                 if (avgExpense > 0)
                 {
                     var variacao = ((cm.TotalExpense - avgExpense) / avgExpense) * 100;
-                    var sinal = variacao >= 0 ? "+" : "";
+                    var sinal    = variacao >= 0 ? "+" : "";
                     sb.AppendLine($"  - Despesas atuais vs média: {sinal}{variacao:F1}%");
                 }
                 sb.AppendLine();
             }
         }
 
-        // Categorias
+        // ── Gastos por comerciante ───────────────────────────────────────────
+        if (ctx.MerchantSpending.Count > 0)
+        {
+            sb.AppendLine("--- GASTOS POR COMERCIANTE (últimos 4 meses) ---");
+            sb.AppendLine("Formato: Comerciante | Mês | Qtd compras | Total gasto");
+            sb.AppendLine();
+
+            // Agrupa por comerciante para exibição organizada
+            var byMerchant = ctx.MerchantSpending
+                .GroupBy(x => x.MerchantName)
+                .OrderByDescending(g => g.Sum(x => x.TotalSpent));
+
+            foreach (var merchant in byMerchant)
+            {
+                sb.AppendLine($"  {merchant.Key}:");
+                foreach (var row in merchant.OrderByDescending(r => r.Year).ThenByDescending(r => r.Month))
+                {
+                    var label = $"{MonthNames[row.Month - 1]}/{row.Year}";
+                    sb.AppendLine($"    - {label}: {row.PurchaseCount}x | {fmt(row.TotalSpent)}");
+                }
+
+                // Total acumulado no período
+                var totalPeriod = merchant.Sum(x => x.TotalSpent);
+                var totalCount  = merchant.Sum(x => x.PurchaseCount);
+                sb.AppendLine($"    Total no período: {totalCount}x | {fmt(totalPeriod)}");
+                sb.AppendLine();
+            }
+        }
+        else
+        {
+            sb.AppendLine("--- GASTOS POR COMERCIANTE ---");
+            sb.AppendLine("Nenhum comerciante normalizado ainda. Os lançamentos ainda não foram associados a comerciantes.");
+            sb.AppendLine();
+        }
+
+        // ── Categorias ───────────────────────────────────────────────────────
         if (ctx.Categories.Count > 0)
         {
             var incomes  = ctx.Categories.Where(c => c.Type == "income").Select(c => c.Name);

@@ -4,7 +4,7 @@ using FinApp.Api.Models;
 
 namespace FinApp.Api.Services;
 
-public class TransactionService(DbConnectionFactory db)
+public class TransactionService(DbConnectionFactory db, MerchantNormalizerService merchantService)
 {
     // Seleciona colunas explicitamente para evitar colisão entre t.* e aliases do JOIN
     private const string SelectCols = @"
@@ -66,13 +66,17 @@ public class TransactionService(DbConnectionFactory db)
                 Notes = req.Notes,
             });
 
+        // ── Normalização de comerciante (ML) ──────────────────────────────
+        if (!string.IsNullOrWhiteSpace(req.Description))
+            _ = Task.Run(() => merchantService.ProcessTransactionAsync(id, req.Description, userId));
+        // ─────────────────────────────────────────────────────────────────
+
         return await conn.QueryFirstOrDefaultAsync<Transaction>($@"
             SELECT {SelectCols}
             FROM transactions t
             LEFT JOIN categories c ON t.category_id = c.id
             WHERE t.id = @Id", new { Id = id });
     }
-
     public async Task<bool> UpdateAsync(int id, int userId, UpdateTransactionRequest req)
     {
         using var conn = db.Create();

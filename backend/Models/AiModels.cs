@@ -58,6 +58,16 @@ public class FinancialContext
     public MonthSummary CurrentMonth { get; set; } = new();
     public List<MonthSummary> Last12Months { get; set; } = [];
     public List<CategoryInfo> Categories { get; set; } = [];
+    public List<MerchantMonthSpending> MerchantSpending { get; set; } = [];
+}
+
+public class MerchantMonthSpending
+{
+    public string  MerchantName  { get; set; } = "";
+    public int     Year          { get; set; }
+    public int     Month         { get; set; }
+    public int     PurchaseCount { get; set; }
+    public decimal TotalSpent    { get; set; }
 }
 
 public class MonthSummary

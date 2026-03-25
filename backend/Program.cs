@@ -21,9 +21,10 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<CategoryService>();
 builder.Services.AddScoped<ImportService>();
-builder.Services.AddScoped<FinancialContextPlugin>();  // novo
-builder.Services.AddScoped<AiService>();               // novo
+builder.Services.AddScoped<FinancialContextPlugin>();  
+builder.Services.AddScoped<AiService>();               
 builder.Services.AddSingleton<JwtService>();
+builder.Services.AddSingleton<MerchantNormalizerService>();
 
 // ── JSON em snake_case ─────────────────────────────────────────────────────
 builder.Services.AddControllers()

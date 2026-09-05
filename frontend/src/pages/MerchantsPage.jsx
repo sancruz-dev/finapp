@@ -1,0 +1,332 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { merchantService, categoryService } from '../services/api';
+
+const fmt = (v) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+
+// A API serializa datas como "MM/dd/yyyy HH:mm:ss" (padrão .NET); convertemos para dd/MM/yyyy
+const fmtDate = (d) => {
+  if (!d) return '';
+  const [datePart] = d.split(' ');
+  const [month, day, year] = datePart.split('/');
+  if (!month || !day || !year) return d;
+  return `${day}/${month}/${year}`;
+};
+
+// ── Estilos (mesmo padrão visual das outras páginas) ────────────────────────
+const s = {
+  page:   { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', system-ui, sans-serif", padding: '2rem 1.5rem' },
+  card:   { background: '#fff', borderRadius: 14, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', padding: '1.5rem', marginBottom: '1.5rem' },
+  btn:    (bg = '#6366f1', color = '#fff', extra = {}) => ({
+    background: bg, color, border: 'none', borderRadius: 8,
+    padding: '8px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem', ...extra,
+  }),
+  input:  { padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.875rem', boxSizing: 'border-box' },
+  select: { padding: '7px 10px', borderRadius: 7, border: '1px solid #e2e8f0', fontSize: '0.85rem', background: '#fff', color: '#334155' },
+  badge:  (color = '#6366f1') => ({
+    display: 'inline-flex', alignItems: 'center', gap: 4,
+    background: color + '22', color, borderRadius: 20, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 600,
+  }),
+  h2:     { fontSize: '1.1rem', fontWeight: 700, color: '#1e293b', margin: '0 0 1rem' },
+  label:  { fontSize: '0.8rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 },
+};
+
+const confidenceColor = (c) => {
+  if (c === null || c === undefined) return '#94a3b8';
+  if (c >= 0.85) return '#22c55e';
+  if (c >= 0.5) return '#f59e0b';
+  return '#ef4444';
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// Linha da fila de revisão — resolve manualmente um lançamento
+// ══════════════════════════════════════════════════════════════════════════
+function ReviewRow({ item, merchants, onResolved }) {
+  const suggestedMerchant = merchants.find(m => m.name === item.suggested_name);
+  const [choice, setChoice]   = useState(suggestedMerchant ? String(suggestedMerchant.id) : '__new__');
+  const [newName, setNewName] = useState(item.suggested_name || '');
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+
+  const resolve = async () => {
+    if (choice === '__new__' && !newName.trim()) {
+      setError('Informe um nome para o novo comerciante.');
+      return;
+    }
+    setLoading(true); setError('');
+    try {
+      const payload = choice === '__new__'
+        ? { review_id: item.id, new_name: newName.trim() }
+        : { review_id: item.id, merchant_id: Number(choice) };
+      await merchantService.resolve(payload);
+      onResolved(item.id, choice === '__new__' ? newName.trim() : null);
+    } catch (e) {
+      setError(e.response?.data?.error || 'Erro ao resolver.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+      <td style={{ padding: '8px 12px', maxWidth: 220 }}>
+        <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.82rem', wordBreak: 'break-word' }}>{item.clean_name}</div>
+        <div style={{ color: '#94a3b8', fontSize: '0.72rem', wordBreak: 'break-word' }}>{item.raw_name}</div>
+      </td>
+      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>{fmtDate(item.transaction_date)}</td>
+      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontWeight: 600 }}>{fmt(item.transaction_amount)}</td>
+      <td style={{ padding: '8px 12px' }}>
+        {item.confidence !== null && item.confidence !== undefined ? (
+          <span style={s.badge(confidenceColor(item.confidence))}>
+            {Math.round(item.confidence * 100)}% {item.suggested_name ? `· ${item.suggested_name}` : ''}
+          </span>
+        ) : (
+          <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>sem sugestão</span>
+        )}
+      </td>
+      <td style={{ padding: '8px 12px', minWidth: 220 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <select value={choice} onChange={e => setChoice(e.target.value)} style={{ ...s.select, flex: 1 }}>
+            <option value="__new__">+ Novo comerciante</option>
+            {merchants.map(m => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        </div>
+        {choice === '__new__' && (
+          <input
+            style={{ ...s.input, width: '100%', marginTop: 6 }}
+            placeholder="Nome do comerciante"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+          />
+        )}
+        {error && <p style={{ color: '#ef4444', fontSize: '0.75rem', margin: '4px 0 0' }}>{error}</p>}
+      </td>
+      <td style={{ padding: '8px 12px' }}>
+        <button onClick={resolve} disabled={loading} style={s.btn()}>
+          {loading ? '...' : '✓ Confirmar'}
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Aba: Fila de revisão
+// ══════════════════════════════════════════════════════════════════════════
+function ReviewQueueTab({ merchants, onMerchantsChange }) {
+  const [items, setItems]           = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillMsg, setBackfillMsg] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await merchantService.reviewQueue();
+      setItems(res.data);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const runBackfill = async () => {
+    setBackfilling(true); setBackfillMsg('');
+    try {
+      const res = await merchantService.backfill();
+      setBackfillMsg(res.data.message);
+      await load();
+    } catch (e) {
+      setBackfillMsg(e.response?.data?.error || 'Erro ao processar histórico.');
+    } finally {
+      setBackfilling(false);
+    }
+  };
+
+  const handleResolved = async (reviewId, createdMerchantName) => {
+    setItems(prev => prev.filter(i => i.id !== reviewId));
+    if (createdMerchantName) {
+      const res = await merchantService.list();
+      onMerchantsChange(res.data);
+    }
+  };
+
+  return (
+    <div style={s.card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem', flexWrap: 'wrap', gap: 8 }}>
+        <div>
+          <h3 style={{ ...s.h2, marginBottom: '0.4rem' }}>🔍 Fila de Revisão</h3>
+          <p style={{ color: '#64748b', fontSize: '0.85rem', margin: 0 }}>
+            Lançamentos que o ML ainda não conseguiu resolver com confiança suficiente (≥ 85%).
+            Confirme o comerciante correto — cada confirmação vira dado de treino.
+          </p>
+        </div>
+        <button onClick={runBackfill} disabled={backfilling} style={s.btn('#818cf8')}>
+          {backfilling ? 'Processando...' : '⚙️ Processar histórico sem comerciante'}
+        </button>
+      </div>
+
+      {backfillMsg && (
+        <div style={{ background: '#eef2ff', color: '#4338ca', borderRadius: 8, padding: '8px 12px', fontSize: '0.82rem', marginBottom: '1rem' }}>
+          {backfillMsg}
+        </div>
+      )}
+
+      {loading ? (
+        <p style={{ color: '#94a3b8' }}>Carregando...</p>
+      ) : items.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+          <div style={{ fontSize: '2rem', marginBottom: 8 }}>✅</div>
+          <p>Nenhum lançamento pendente de revisão.</p>
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                {['Lançamento', 'Data', 'Valor', 'Sugestão ML', 'Resolver', ''].map(h => (
+                  <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => (
+                <ReviewRow key={item.id} item={item} merchants={merchants} onResolved={handleResolved} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Aba: Comerciantes (CRUD + aliases manuais)
+// ══════════════════════════════════════════════════════════════════════════
+function MerchantsTab({ merchants, onMerchantsChange }) {
+  const [categories, setCategories] = useState([]);
+  const [newName, setNewName]       = useState('');
+  const [newCategory, setNewCategory] = useState('');
+  const [creating, setCreating]     = useState(false);
+  const [aliasInputs, setAliasInputs] = useState({}); // merchantId -> texto
+  const [addingAlias, setAddingAlias] = useState(null);
+
+  useEffect(() => {
+    categoryService.list().then(r => setCategories(r.data));
+  }, []);
+
+  const create = async () => {
+    if (!newName.trim()) return;
+    setCreating(true);
+    try {
+      await merchantService.create({ name: newName.trim(), category_id: newCategory ? Number(newCategory) : null });
+      const res = await merchantService.list();
+      onMerchantsChange(res.data);
+      setNewName(''); setNewCategory('');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const addAlias = async (merchantId) => {
+    const raw = aliasInputs[merchantId]?.trim();
+    if (!raw) return;
+    setAddingAlias(merchantId);
+    try {
+      await merchantService.addAlias(merchantId, raw);
+      setAliasInputs(prev => ({ ...prev, [merchantId]: '' }));
+    } finally {
+      setAddingAlias(null);
+    }
+  };
+
+  const expenseCategories = categories.filter(c => c.type === 'expense');
+
+  return (
+    <>
+      <div style={s.card}>
+        <h3 style={s.h2}>🏬 Novo Comerciante</h3>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input
+            style={{ ...s.input, flex: 1, minWidth: 200 }}
+            placeholder="Ex: Oliveira Mini, Shopee..."
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && create()}
+          />
+          <select style={s.select} value={newCategory} onChange={e => setNewCategory(e.target.value)}>
+            <option value="">Sem categoria padrão</option>
+            {expenseCategories.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <button onClick={create} disabled={creating} style={s.btn()}>
+            {creating ? '...' : '+ Criar'}
+          </button>
+        </div>
+      </div>
+
+      <div style={s.card}>
+        <h3 style={s.h2}>📋 Comerciantes Cadastrados ({merchants.length})</h3>
+        {merchants.length === 0 ? (
+          <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Nenhum comerciante ainda. Crie um acima ou resolva itens na fila de revisão.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {merchants.map(m => (
+              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 12px', background: '#f8fafc', borderRadius: 8 }}>
+                <strong style={{ color: '#1e293b', minWidth: 160 }}>{m.name}</strong>
+                <input
+                  style={{ ...s.input, flex: 1, minWidth: 180 }}
+                  placeholder="Adicionar alias (nome bruto do extrato)"
+                  value={aliasInputs[m.id] || ''}
+                  onChange={e => setAliasInputs(prev => ({ ...prev, [m.id]: e.target.value }))}
+                  onKeyDown={e => e.key === 'Enter' && addAlias(m.id)}
+                />
+                <button onClick={() => addAlias(m.id)} disabled={addingAlias === m.id} style={s.btn('#f1f5f9', '#64748b')}>
+                  {addingAlias === m.id ? '...' : '+ Alias'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Página principal
+// ══════════════════════════════════════════════════════════════════════════
+export default function MerchantsPage() {
+  const [tab, setTab] = useState('review');
+  const [merchants, setMerchants] = useState([]);
+
+  useEffect(() => {
+    merchantService.list().then(r => setMerchants(r.data));
+  }, []);
+
+  return (
+    <div style={s.page}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <h1 style={{ margin: 0, fontSize: '1.4rem', color: '#1e293b' }}>🏪 Comerciantes</h1>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[['review', '🔍 Fila de Revisão'], ['merchants', '🏬 Comerciantes']].map(([t, label]) => (
+              <button key={t} onClick={() => setTab(t)}
+                style={s.btn(tab === t ? '#6366f1' : '#f1f5f9', tab === t ? '#fff' : '#64748b')}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {tab === 'review' && <ReviewQueueTab merchants={merchants} onMerchantsChange={setMerchants} />}
+        {tab === 'merchants' && <MerchantsTab merchants={merchants} onMerchantsChange={setMerchants} />}
+      </div>
+    </div>
+  );
+}

@@ -32,6 +32,14 @@ public class MerchantsController(MerchantNormalizerService merchantService) : Co
         return Ok(new { message = "Alias adicionado e modelo retreinado." });
     }
 
+    /// Processa o histórico de lançamentos sem merchant_id (fila de revisão)
+    [HttpPost("backfill")]
+    public async Task<IActionResult> Backfill()
+    {
+        var processed = await merchantService.BackfillAsync(UserId);
+        return Ok(new { processed, message = $"{processed} lançamentos processados." });
+    }
+
     // ── Fila de revisão ──────────────────────────────────────────────────
 
     /// Lista itens pendentes de revisão

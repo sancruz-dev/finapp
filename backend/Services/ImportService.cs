@@ -4,7 +4,7 @@ using Dapper;
 
 namespace FinApp.Api.Services;
 
-public class ImportService(DbConnectionFactory db, CategoryService categoryService)
+public class ImportService(DbConnectionFactory db, CategoryService categoryService, MerchantNormalizerService merchantService)
 {
     public async Task<CsvPreviewResponse> ParseAndMatchAsync(int userId, Stream csvStream)
     {
@@ -95,9 +95,10 @@ public class ImportService(DbConnectionFactory db, CategoryService categoryServi
         {
             if (string.IsNullOrWhiteSpace(row.Description) || row.Amount <= 0) continue;
 
-            await conn.ExecuteAsync(@"
+            var id = await conn.ExecuteScalarAsync<int>(@"
                 INSERT INTO transactions (user_id, type, amount, description, date, category_id)
-                VALUES (@UserId, @Type, @Amount, @Description, @Date, @CategoryId)",
+                VALUES (@UserId, @Type, @Amount, @Description, @Date, @CategoryId);
+                SELECT LAST_INSERT_ID();",
                 new
                 {
                     UserId = userId,
@@ -108,6 +109,10 @@ public class ImportService(DbConnectionFactory db, CategoryService categoryServi
                     CategoryId = row.CategoryId,
                 });
             saved++;
+
+            // ── Normalização de comerciante (ML) ──────────────────────────
+            _ = Task.Run(() => merchantService.ProcessTransactionAsync(id, row.Description, userId));
+            // ───────────────────────────────────────────────────────────────
         }
 
         return saved;

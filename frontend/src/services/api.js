@@ -43,4 +43,14 @@ export const categoryService = {
   remove: (id) => api.delete(`/categories/${id}`),
 };
 
+export const merchantService = {
+  list: () => api.get('/merchants'),
+  create: (data) => api.post('/merchants', data),
+  addAlias: (merchantId, rawName) => api.post(`/merchants/${merchantId}/aliases`, { raw_name: rawName }),
+  reviewQueue: () => api.get('/merchants/review-queue'),
+  resolve: (data) => api.post('/merchants/review-queue/resolve', data),
+  backfill: () => api.post('/merchants/backfill'),
+  predict: (name) => api.get('/merchants/predict', { params: { name } }),
+};
+
 export default api;

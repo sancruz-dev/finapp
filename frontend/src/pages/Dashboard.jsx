@@ -166,6 +166,9 @@ export default function Dashboard() {
                 <button onClick={() => navigate('/import')} style={s.btn('#818cf8')}>
                   📥 Importar CSV
                 </button>
+                <button onClick={() => navigate('/merchants')} style={s.btn('#818cf8')}>
+                  🏪 Comerciantes
+                </button>
               </div>
             </div>
 

@@ -3,6 +3,7 @@ using FinApp.Api.Data;
 using FinApp.Api.Models;
 using Microsoft.ML;
 using Microsoft.ML.Data;
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 namespace FinApp.Api.Services;
@@ -18,10 +19,15 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
 {
     private readonly MLContext _mlContext = new(seed: 42);
 
-    // O modelo fica em memória após o primeiro treino
-    private ITransformer?       _model;
-    private PredictionEngine<MerchantTrainingData, MerchantPredictionOutput>? _predEngine;
-    private readonly SemaphoreSlim _trainLock = new(1, 1);
+    // Este serviço é Singleton (o modelo ML precisa ficar em memória), mas atende
+    // TODOS os usuários — por isso o modelo/engine e o lock de treino são por usuário.
+    private readonly ConcurrentDictionary<int, PredictionEngine<MerchantTrainingData, MerchantPredictionOutput>> _predEngines = new();
+    private readonly ConcurrentDictionary<int, SemaphoreSlim> _trainLocks = new();
+
+    // Modelos treinados são persistidos em disco para sobreviver a restart da API
+    // (sem isso, o serviço voltaria a treinar do zero — e sem sugestões — a cada deploy/reinício).
+    private static readonly string ModelDirectory = Path.Combine(AppContext.BaseDirectory, "MlModels");
+    private static string ModelPath(int userId) => Path.Combine(ModelDirectory, $"merchant-model-{userId}.zip");
 
     // Limiar de confiança para resolução automática
     private const float AutoResolveThreshold = 0.85f;
@@ -83,11 +89,11 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
             };
         }
 
-        // 2. Se não tem modelo treinado ainda, retorna sem sugestão
-        if (_predEngine is null)
+        // 2. Se não tem modelo treinado ainda (nem em memória, nem em disco), retorna sem sugestão
+        if (!_predEngines.TryGetValue(userId, out var predEngine))
         {
-            await TryLoadOrTrainModelAsync(userId);
-            if (_predEngine is null)
+            predEngine = await TryLoadOrTrainModelAsync(userId);
+            if (predEngine is null)
             {
                 return new MerchantPrediction { CleanName = cleanName, Confidence = 0f };
             }
@@ -95,7 +101,7 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
 
         // 3. Predição via ML.NET
         var input  = new MerchantTrainingData { CleanName = cleanName };
-        var output = _predEngine.Predict(input);
+        var output = predEngine.Predict(input);
 
         var confidence = output.Score.Length > 0 ? output.Score.Max() : 0f;
 
@@ -267,6 +273,31 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
         _ = Task.Run(() => TrainModelAsync(userId));
     }
 
+    // ── Backfill do histórico ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Processa (via ML/fila de revisão) todos os lançamentos existentes do
+    /// usuário que ainda não têm merchant_id resolvido. Útil para popular a
+    /// fila de revisão pela primeira vez, com o histórico já importado.
+    /// </summary>
+    public async Task<int> BackfillAsync(int userId)
+    {
+        using var conn = db.Create();
+        var pending = (await conn.QueryAsync<(int Id, string Description)>(@"
+            SELECT id AS Id, description AS Description
+            FROM transactions
+            WHERE user_id = @UserId
+              AND merchant_id IS NULL
+              AND description IS NOT NULL
+              AND description <> ''",
+            new { UserId = userId })).ToList();
+
+        foreach (var tx in pending)
+            await ProcessTransactionAsync(tx.Id, tx.Description, userId);
+
+        return pending.Count;
+    }
+
     // ── Fila de revisão ────────────────────────────────────────────────────
 
     public async Task<IEnumerable<ReviewQueueItem>> GetReviewQueueAsync(int userId)
@@ -298,7 +329,8 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
     /// </summary>
     public async Task TrainModelAsync(int userId)
     {
-        await _trainLock.WaitAsync();
+        var trainLock = _trainLocks.GetOrAdd(userId, _ => new SemaphoreSlim(1, 1));
+        await trainLock.WaitAsync();
         try
         {
             using var conn = db.Create();
@@ -341,10 +373,22 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
                     featureColumnName: "Features"))
                 .Append(_mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
 
-            _model     = pipeline.Fit(dataView);
-            _predEngine = _mlContext.Model.CreatePredictionEngine<MerchantTrainingData, MerchantPredictionOutput>(_model);
+            var model      = pipeline.Fit(dataView);
+            var predEngine = _mlContext.Model.CreatePredictionEngine<MerchantTrainingData, MerchantPredictionOutput>(model);
+            _predEngines[userId] = predEngine;
 
-            logger.LogInformation("ML: modelo treinado com {N} aliases.", trainingData.Count);
+            // Persiste em disco para não precisar retreinar do zero a cada restart da API
+            try
+            {
+                Directory.CreateDirectory(ModelDirectory);
+                _mlContext.Model.Save(model, dataView.Schema, ModelPath(userId));
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Modelo treinado, mas falhou ao salvar em disco (usuário {UserId}).", userId);
+            }
+
+            logger.LogInformation("ML: modelo treinado com {N} aliases (usuário {UserId}).", trainingData.Count, userId);
         }
         catch (Exception ex)
         {
@@ -352,16 +396,39 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
         }
         finally
         {
-            _trainLock.Release();
+            trainLock.Release();
         }
     }
 
     // ── Helpers privados ───────────────────────────────────────────────────
 
-    private async Task TryLoadOrTrainModelAsync(int userId)
+    /// <summary>
+    /// Tenta obter uma prediction engine pronta para o usuário: primeiro carregando
+    /// um modelo já treinado do disco (restart da API), senão treinando do zero
+    /// a partir dos aliases confirmados no banco.
+    /// </summary>
+    private async Task<PredictionEngine<MerchantTrainingData, MerchantPredictionOutput>?> TryLoadOrTrainModelAsync(int userId)
     {
+        var path = ModelPath(userId);
+        if (File.Exists(path))
+        {
+            try
+            {
+                var model  = _mlContext.Model.Load(path, out _);
+                var engine = _mlContext.Model.CreatePredictionEngine<MerchantTrainingData, MerchantPredictionOutput>(model);
+                _predEngines[userId] = engine;
+                return engine;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Falha ao carregar modelo ML do disco (usuário {UserId}); retreinando.", userId);
+            }
+        }
+
         try { await TrainModelAsync(userId); }
         catch (Exception ex) { logger.LogWarning(ex, "Não foi possível treinar modelo."); }
+
+        return _predEngines.TryGetValue(userId, out var trained) ? trained : null;
     }
 
     private async Task<Merchant?> FindExactAliasAsync(string rawName, string cleanName, int userId)

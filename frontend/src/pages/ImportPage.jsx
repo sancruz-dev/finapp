@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import Header, { HEADER_HEIGHT } from '../components/Header';
 
 // ── API helpers ────────────────────────────────────────────────────────────
 const api = axios.create({ baseURL: process.env.REACT_APP_API_URL || '/api' });
@@ -14,22 +15,22 @@ const fmt = v =>
 
 // ── Estilos ────────────────────────────────────────────────────────────────
 const s = {
-  page:   { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', system-ui, sans-serif", padding: '2rem 1.5rem' },
-  card:   { background: '#fff', borderRadius: 14, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', padding: '1.5rem', marginBottom: '1.5rem' },
+  page:   { flex: 1, background: 'var(--bg-page)', fontFamily: "'Segoe UI', system-ui, sans-serif", padding: '2rem 1.5rem', paddingTop: `calc(2rem + ${HEADER_HEIGHT}px)` },
+  card:   { background: 'var(--bg-card)', borderRadius: 14, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', padding: '1.5rem', marginBottom: '1.5rem' },
   btn:    (bg = '#6366f1', color = '#fff', extra = {}) => ({
     background: bg, color, border: 'none', borderRadius: 8,
     padding: '8px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem', ...extra,
   }),
-  input:  { padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.875rem', boxSizing: 'border-box' },
+  input:  { padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.875rem', boxSizing: 'border-box', background: 'var(--input-bg)', color: 'var(--text-primary)' },
   badge:  (color = '#6366f1') => ({
     display: 'inline-flex', alignItems: 'center', gap: 4,
     background: color + '22', color, borderRadius: 20, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 600,
   }),
-  tag:    { display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f1f5f9',
-            borderRadius: 20, padding: '3px 10px', fontSize: '0.78rem', color: '#475569' },
-  select: { padding: '7px 10px', borderRadius: 7, border: '1px solid #e2e8f0', fontSize: '0.85rem', background: '#fff', color: '#334155' },
-  h2:     { fontSize: '1.1rem', fontWeight: 700, color: '#1e293b', margin: '0 0 1rem' },
-  label:  { fontSize: '0.8rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 },
+  tag:    { display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--bg-subtle)',
+            borderRadius: 20, padding: '3px 10px', fontSize: '0.78rem', color: 'var(--text-secondary)' },
+  select: { padding: '7px 10px', borderRadius: 7, border: '1px solid var(--border)', fontSize: '0.85rem', background: 'var(--input-bg)', color: 'var(--text-secondary)' },
+  h2:     { fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 1rem' },
+  label:  { fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 },
 };
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -65,7 +66,7 @@ function KeywordsManager({ categories, onCategoriesChange }) {
   return (
     <div style={s.card}>
       <h3 style={s.h2}>🏷️ Palavras-chave por Categoria</h3>
-      <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
         Palavras-chave são usadas para categorizar automaticamente os lançamentos importados.
         A busca é <strong>case-insensitive</strong> — IFOOD, Ifood e ifood são equivalentes.
       </p>
@@ -81,7 +82,7 @@ function KeywordsManager({ categories, onCategoriesChange }) {
                 padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
                 textAlign: 'left', fontSize: '0.875rem',
                 background: selected === c.id ? c.color + '22' : 'transparent',
-                color: selected === c.id ? c.color : '#475569',
+                color: selected === c.id ? c.color : 'var(--text-secondary)',
                 fontWeight: selected === c.id ? 700 : 500,
               }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: c.color, flexShrink: 0 }} />
@@ -100,14 +101,14 @@ function KeywordsManager({ categories, onCategoriesChange }) {
         {/* Keywords */}
         <div>
           {!cat ? (
-            <div style={{ color: '#94a3b8', fontSize: '0.875rem', marginTop: '2.5rem', textAlign: 'center' }}>
+            <div style={{ color: 'var(--text-faint)', fontSize: '0.875rem', marginTop: '2.5rem', textAlign: 'center' }}>
               ← Selecione uma categoria para gerenciar palavras-chave
             </div>
           ) : (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '1rem' }}>
                 <span style={{ width: 12, height: 12, borderRadius: '50%', background: cat.color }} />
-                <strong style={{ color: '#1e293b' }}>{cat.name}</strong>
+                <strong style={{ color: 'var(--text-primary)' }}>{cat.name}</strong>
                 <span style={s.badge(cat.type === 'income' ? '#22c55e' : '#ef4444')}>
                   {cat.type === 'income' ? 'Receita' : 'Despesa'}
                 </span>
@@ -127,7 +128,7 @@ function KeywordsManager({ categories, onCategoriesChange }) {
               </div>
 
               {(!cat.keywords || cat.keywords.length === 0) ? (
-                <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Nenhuma palavra-chave cadastrada.</p>
+                <p style={{ color: 'var(--text-faint)', fontSize: '0.85rem' }}>Nenhuma palavra-chave cadastrada.</p>
               ) : (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {cat.keywords.map((kw) => (
@@ -135,7 +136,7 @@ function KeywordsManager({ categories, onCategoriesChange }) {
                       {kw.keyword}
                       <button
                         onClick={() => removeKeyword(kw.id)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 0, lineHeight: 1 }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', padding: 0, lineHeight: 1 }}
                       >✕</button>
                     </span>
                   ))}
@@ -175,9 +176,9 @@ function CsvUploader({ onPreview }) {
 
   return (
     <div style={s.card}>
-      <h3 style={s.h2}>📄 Importar Fatura CSV</h3>
-      <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: '1rem' }}>
-        Formato esperado: <code style={{ background: '#f8fafc', padding: '1px 6px', borderRadius: 4 }}>Data, Descrição, Valor</code> —
+      <h3 style={s.h2}>📄 Importar Fatura CSV/XLSX</h3>
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+        Formato esperado: <code style={{ background: 'var(--bg-subtle)', padding: '1px 6px', borderRadius: 4 }}>Data, Descrição, Valor</code> —
         separador vírgula ou ponto-e-vírgula. Valor negativo = despesa, positivo = receita.
       </p>
 
@@ -187,17 +188,17 @@ function CsvUploader({ onPreview }) {
         onDrop={e => { e.preventDefault(); setDragging(false); upload(e.dataTransfer.files[0]); }}
         onClick={() => inputRef.current?.click()}
         style={{
-          border: `2px dashed ${dragging ? '#6366f1' : '#cbd5e1'}`,
+          border: `2px dashed ${dragging ? '#6366f1' : 'var(--border)'}`,
           borderRadius: 12, padding: '3rem', textAlign: 'center', cursor: 'pointer',
-          background: dragging ? '#eef2ff' : '#f8fafc', transition: 'all 0.2s',
+          background: dragging ? 'var(--tint-accent-bg)' : 'var(--bg-subtle)', transition: 'all 0.2s',
         }}
       >
         <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>📂</div>
-        <p style={{ color: '#475569', fontWeight: 600, margin: 0 }}>
-          {loading ? 'Processando...' : 'Arraste o CSV aqui ou clique para selecionar'}
+        <p style={{ color: 'var(--text-secondary)', fontWeight: 600, margin: 0 }}>
+          {loading ? 'Processando...' : 'Arraste o CSV/XLSX aqui ou clique para selecionar'}
         </p>
-        <p style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: 4 }}>Arquivos .csv até 10 MB</p>
-        <input ref={inputRef} type="file" accept=".csv" style={{ display: 'none' }}
+        <p style={{ color: 'var(--text-faint)', fontSize: '0.8rem', marginTop: 4 }}>Arquivos .csv ou .xlsx até 10 MB</p>
+        <input ref={inputRef} type="file" accept=".csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style={{ display: 'none' }}
           onChange={e => upload(e.target.files[0])} />
       </div>
       {error && <p style={{ color: '#ef4444', marginTop: '0.75rem', fontSize: '0.875rem' }}>{error}</p>}
@@ -266,7 +267,7 @@ function ImportReview({ preview, categories, onReset }) {
       <div style={{ ...s.card, textAlign: 'center', padding: '3rem' }}>
         <div style={{ fontSize: '3.5rem' }}>✅</div>
         <h2 style={{ color: '#22c55e', margin: '0.5rem 0' }}>{done} transações importadas!</h2>
-        <p style={{ color: '#64748b' }}>Acesse o dashboard para visualizar os lançamentos.</p>
+        <p style={{ color: 'var(--text-muted)' }}>Acesse o dashboard para visualizar os lançamentos.</p>
         <button onClick={onReset} style={{ ...s.btn(), marginTop: '1rem' }}>
           Importar outro arquivo
         </button>
@@ -283,16 +284,16 @@ function ImportReview({ preview, categories, onReset }) {
       {/* ── Banner de parcelas detectadas ─────────────────────────────── */}
       {installmentCount > 0 && (
         <div style={{
-          background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: 12,
+          background: 'var(--tint-amber-bg)', border: '1px solid #f59e0b', borderRadius: 12,
           padding: '1rem 1.25rem', marginBottom: '1rem',
           display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap',
         }}>
           <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>📅</span>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <p style={{ margin: 0, fontWeight: 700, color: '#92400e', fontSize: '0.9rem' }}>
+            <p style={{ margin: 0, fontWeight: 700, color: 'var(--tint-amber-text)', fontSize: '0.9rem' }}>
               {installmentCount} lançamento{installmentCount > 1 ? 's' : ''} parcelado{installmentCount > 1 ? 's' : ''} detectado{installmentCount > 1 ? 's' : ''}
             </p>
-            <p style={{ margin: '3px 0 0', color: '#78350f', fontSize: '0.82rem' }}>
+            <p style={{ margin: '3px 0 0', color: 'var(--tint-amber-text-2)', fontSize: '0.82rem' }}>
               Estes lançamentos têm datas fora de <strong>{formatMonth(dominantMonth)}</strong> — provavelmente são parcelas.
               Corrija a data manualmente ou use <strong>"Corrigir todas"</strong> para mover para {formatMonth(dominantMonth)}.
             </p>
@@ -300,7 +301,7 @@ function ImportReview({ preview, categories, onReset }) {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button
               onClick={() => setShowOnlyInstallments(v => !v)}
-              style={s.btn(showOnlyInstallments ? '#f59e0b' : '#fef3c7', showOnlyInstallments ? '#fff' : '#92400e')}
+              style={s.btn(showOnlyInstallments ? '#f59e0b' : 'var(--tint-amber-bg)', showOnlyInstallments ? '#fff' : 'var(--tint-amber-text)')}
             >
               {showOnlyInstallments ? '← Ver todas' : `🔍 Ver parcelas (${pendingInst})`}
             </button>
@@ -330,7 +331,7 @@ function ImportReview({ preview, categories, onReset }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={onReset} style={s.btn('#f1f5f9', '#64748b')}>← Novo arquivo</button>
+            <button onClick={onReset} style={s.btn('var(--bg-subtle)', 'var(--text-muted)')}>← Novo arquivo</button>
             <button onClick={confirm} disabled={loading} style={s.btn()}>
               {loading ? 'Salvando...' : `✓ Confirmar (${rows.length})`}
             </button>
@@ -340,9 +341,9 @@ function ImportReview({ preview, categories, onReset }) {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
             <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+              <tr style={{ background: 'var(--bg-subtle)', borderBottom: '2px solid var(--border)' }}>
                 {['Data', 'Descrição', 'Tipo', 'Valor (R$)', 'Categoria', ''].map(h => (
-                  <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -351,12 +352,12 @@ function ImportReview({ preview, categories, onReset }) {
                 const realIdx = rows.indexOf(row);
                 return (
                   <tr key={realIdx} style={{
-                    borderBottom: '1px solid #f1f5f9',
+                    borderBottom: '1px solid var(--border-light)',
                     background: row.type === 'refund'
-                      ? '#f0fdf4'
+                      ? 'var(--tint-green-bg)'
                       : row.is_installment
-                        ? '#fff7ed'
-                        : (!row.category_id ? '#fffbeb' : 'transparent'),
+                        ? 'var(--tint-orange-bg)'
+                        : (!row.category_id ? 'var(--tint-amber-bg)' : 'transparent'),
                   }}>
                     {/* Data */}
                     <td style={{ padding: '8px 12px' }}>
@@ -375,7 +376,7 @@ function ImportReview({ preview, categories, onReset }) {
                               ? { ...ro, date: newDate, is_installment: isStillOutside }
                               : ro));
                           }}
-                          style={{ ...s.input, width: 140, borderColor: row.is_installment ? '#f59e0b' : '#e2e8f0' }}
+                          style={{ ...s.input, width: 140, borderColor: row.is_installment ? '#f59e0b' : 'var(--border)' }}
                         />
                       </div>
                     </td>
@@ -393,7 +394,7 @@ function ImportReview({ preview, categories, onReset }) {
                           ...s.select, width: 120,
                           color: row.type === 'refund' ? '#22c55e' : '#ef4444',
                           fontWeight: 700,
-                          borderColor: row.type === 'refund' ? '#22c55e' : '#e2e8f0',
+                          borderColor: row.type === 'refund' ? '#22c55e' : 'var(--border)',
                         }}
                       >
                         <option value="expense">Despesa</option>
@@ -411,7 +412,7 @@ function ImportReview({ preview, categories, onReset }) {
                       <select
                         value={row.category_id ?? ''}
                         onChange={e => setCategoryForRow(realIdx, e.target.value)}
-                        style={{ ...s.select, width: '100%', borderColor: !row.category_id ? '#f97316' : '#e2e8f0', background: !row.category_id ? '#fffbeb' : '#fff' }}
+                        style={{ ...s.select, width: '100%', borderColor: !row.category_id ? '#f97316' : 'var(--border)', background: !row.category_id ? 'var(--tint-amber-bg)' : 'var(--input-bg)' }}
                       >
                         <option value="">⚠ Sem categoria</option>
                         {expenseCategories.map(c => (
@@ -448,31 +449,34 @@ export default function ImportPage() {
   }, []);
 
   return (
-    <div style={s.page}>
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <h1 style={{ margin: 0, fontSize: '1.4rem', color: '#1e293b' }}>📥 Importação de Fatura</h1>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[['import', '📄 Importar CSV'], ['keywords', '🏷️ Palavras-chave']].map(([t, label]) => (
-              <button key={t} onClick={() => setTab(t)}
-                style={s.btn(tab === t ? '#6366f1' : '#f1f5f9', tab === t ? '#fff' : '#64748b')}>
-                {label}
-              </button>
-            ))}
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <Header showBack />
+      <div style={s.page}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h1 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-primary)' }}>📥 Importação de Fatura</h1>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[['import', '📄 Importação'], ['keywords', '🏷️ Palavras-chave']].map(([t, label]) => (
+                <button key={t} onClick={() => setTab(t)}
+                  style={s.btn(tab === t ? '#6366f1' : 'var(--bg-subtle)', tab === t ? '#fff' : 'var(--text-muted)')}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {tab === 'keywords' && (
+            <KeywordsManager categories={categories} onCategoriesChange={setCategories} />
+          )}
+
+          {tab === 'import' && !preview && (
+            <CsvUploader onPreview={setPreview} />
+          )}
+
+          {tab === 'import' && preview && (
+            <ImportReview preview={preview} categories={categories} onReset={() => setPreview(null)} />
+          )}
         </div>
-
-        {tab === 'keywords' && (
-          <KeywordsManager categories={categories} onCategoriesChange={setCategories} />
-        )}
-
-        {tab === 'import' && !preview && (
-          <CsvUploader onPreview={setPreview} />
-        )}
-
-        {tab === 'import' && preview && (
-          <ImportReview preview={preview} categories={categories} onReset={() => setPreview(null)} />
-        )}
       </div>
     </div>
   );

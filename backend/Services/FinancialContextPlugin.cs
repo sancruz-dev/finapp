@@ -132,7 +132,7 @@ public class FinancialContextPlugin(DbConnectionFactory db)
               AND t.merchant_id IS NOT NULL
               AND t.date       >= @Since
             GROUP BY m.id, m.name, YEAR(t.date), MONTH(t.date)
-            ORDER BY m.name, t.date DESC",
+            ORDER BY m.name, YEAR(t.date) DESC, MONTH(t.date) DESC",
             new {
                 UserId = userId,
                 Since  = new DateTime(now.Year, now.Month, 1).AddMonths(-3)

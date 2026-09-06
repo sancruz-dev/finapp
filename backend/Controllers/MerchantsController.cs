@@ -24,6 +24,14 @@ public class MerchantsController(MerchantNormalizerService merchantService) : Co
     public async Task<IActionResult> Create([FromBody] CreateMerchantRequest req)
         => Ok(await merchantService.CreateMerchantAsync(req, UserId));
 
+    /// Atualiza a categoria padrão de um comerciante existente
+    [HttpPut("{id}/category")]
+    public async Task<IActionResult> UpdateCategory(int id, [FromBody] UpdateMerchantCategoryRequest req)
+    {
+        var ok = await merchantService.UpdateMerchantCategoryAsync(id, req.CategoryId, UserId);
+        return ok ? Ok(new { message = "Categoria atualizada." }) : NotFound();
+    }
+
     /// Adiciona um alias (nome bruto) a um comerciante existente
     [HttpPost("{id}/aliases")]
     public async Task<IActionResult> AddAlias(int id, [FromBody] AddAliasRequest req)

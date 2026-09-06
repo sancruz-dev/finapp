@@ -56,6 +56,12 @@ public class CreateMerchantRequest
     public int?    CategoryId { get; set; }
 }
 
+/// Atualização da categoria padrão de um comerciante existente
+public class UpdateMerchantCategoryRequest
+{
+    public int? CategoryId { get; set; }
+}
+
 /// Resolução manual de um item da fila de revisão
 public class ResolveReviewRequest
 {

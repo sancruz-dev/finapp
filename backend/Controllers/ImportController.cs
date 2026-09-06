@@ -18,10 +18,15 @@ public class ImportController(ImportService svc) : ControllerBase
     public async Task<IActionResult> Preview(IFormFile file)
     {
         if (file is null || file.Length == 0)
-            return BadRequest(new { error = "Arquivo CSV inválido ou vazio." });
+            return BadRequest(new { error = "Arquivo inválido ou vazio." });
+
+        var validExtensions = new[] { ".csv", ".xlsx", ".xls" };
+        var ext = Path.GetExtension(file.FileName);
+        if (!validExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))
+            return BadRequest(new { error = "Formato não suportado. Envie um arquivo .csv ou .xlsx." });
 
         using var stream = file.OpenReadStream();
-        var preview = await svc.ParseAndMatchAsync(UserId, stream);
+        var preview = await svc.ParseAndMatchAsync(UserId, stream, file.FileName);
         return Ok(preview);
     }
 

@@ -44,14 +44,14 @@ export default function TransactionModal({ initial, onSave, onClose }) {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
   };
-  const box = { background: '#fff', borderRadius: 12, padding: '2rem', width: 480, maxWidth: '95vw' };
+  const box = { background: 'var(--bg-card)', color: 'var(--text-primary)', borderRadius: 12, padding: '2rem', width: 480, maxWidth: '95vw' };
 
   return (
     <div style={overlay} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={box}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
           <h3 style={{ margin: 0 }}>{initial ? 'Editar' : 'Nova'} Transação</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer', color: 'var(--text-primary)' }}>✕</button>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -65,9 +65,9 @@ export default function TransactionModal({ initial, onSave, onClose }) {
                   style={{
                     flex: 1, padding: '10px', borderRadius: 8, cursor: 'pointer',
                     fontWeight: 600, border: '2px solid', fontSize: '0.82rem',
-                    borderColor: active ? cfg.border : '#e2e8f0',
-                    background:  active ? cfg.bg    : '#fff',
-                    color:       active ? cfg.color : '#64748b',
+                    borderColor: active ? cfg.border : 'var(--border)',
+                    background:  active ? cfg.bg    : 'var(--bg-card)',
+                    color:       active ? cfg.color : 'var(--text-muted)',
                   }}>
                   {cfg.label}
                 </button>
@@ -84,7 +84,7 @@ export default function TransactionModal({ initial, onSave, onClose }) {
             <div key={key} style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>{label}</label>
               <input {...props} value={form[key]} onChange={e => set(key, e.target.value)}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '1rem', boxSizing: 'border-box' }} />
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: '1rem', boxSizing: 'border-box', background: 'var(--input-bg)', color: 'var(--text-primary)' }} />
             </div>
           ))}
 
@@ -99,7 +99,7 @@ export default function TransactionModal({ initial, onSave, onClose }) {
               )}
             </label>
             <select value={form.category_id} onChange={e => set('category_id', e.target.value)}
-              style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '1rem' }}>
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: '1rem', background: 'var(--input-bg)', color: 'var(--text-primary)' }}>
               <option value="">Sem categoria</option>
               {filtered.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>

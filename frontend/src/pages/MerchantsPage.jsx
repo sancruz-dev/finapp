@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { merchantService, categoryService } from '../services/api';
+import Header, { HEADER_HEIGHT } from '../components/Header';
 
 const fmt = (v) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -15,20 +16,20 @@ const fmtDate = (d) => {
 
 // ── Estilos (mesmo padrão visual das outras páginas) ────────────────────────
 const s = {
-  page:   { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', system-ui, sans-serif", padding: '2rem 1.5rem' },
-  card:   { background: '#fff', borderRadius: 14, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', padding: '1.5rem', marginBottom: '1.5rem' },
+  page:   { flex: 1, background: 'var(--bg-page)', fontFamily: "'Segoe UI', system-ui, sans-serif", padding: '2rem 1.5rem', paddingTop: `calc(2rem + ${HEADER_HEIGHT}px)` },
+  card:   { background: 'var(--bg-card)', borderRadius: 14, boxShadow: '0 1px 6px rgba(0,0,0,0.07)', padding: '1.5rem', marginBottom: '1.5rem' },
   btn:    (bg = '#6366f1', color = '#fff', extra = {}) => ({
     background: bg, color, border: 'none', borderRadius: 8,
     padding: '8px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem', ...extra,
   }),
-  input:  { padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: '0.875rem', boxSizing: 'border-box' },
-  select: { padding: '7px 10px', borderRadius: 7, border: '1px solid #e2e8f0', fontSize: '0.85rem', background: '#fff', color: '#334155' },
+  input:  { padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.875rem', boxSizing: 'border-box', background: 'var(--input-bg)', color: 'var(--text-primary)' },
+  select: { padding: '7px 10px', borderRadius: 7, border: '1px solid var(--border)', fontSize: '0.85rem', background: 'var(--input-bg)', color: 'var(--text-secondary)' },
   badge:  (color = '#6366f1') => ({
     display: 'inline-flex', alignItems: 'center', gap: 4,
     background: color + '22', color, borderRadius: 20, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 600,
   }),
-  h2:     { fontSize: '1.1rem', fontWeight: 700, color: '#1e293b', margin: '0 0 1rem' },
-  label:  { fontSize: '0.8rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 },
+  h2:     { fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 1rem' },
+  label:  { fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 },
 };
 
 const confidenceColor = (c) => {
@@ -68,10 +69,10 @@ function ReviewRow({ item, merchants, onResolved }) {
   };
 
   return (
-    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+    <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
       <td style={{ padding: '8px 12px', maxWidth: 220 }}>
-        <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.82rem', wordBreak: 'break-word' }}>{item.clean_name}</div>
-        <div style={{ color: '#94a3b8', fontSize: '0.72rem', wordBreak: 'break-word' }}>{item.raw_name}</div>
+        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.82rem', wordBreak: 'break-word' }}>{item.clean_name}</div>
+        <div style={{ color: 'var(--text-faint)', fontSize: '0.72rem', wordBreak: 'break-word' }}>{item.raw_name}</div>
       </td>
       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>{fmtDate(item.transaction_date)}</td>
       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontWeight: 600 }}>{fmt(item.transaction_amount)}</td>
@@ -81,7 +82,7 @@ function ReviewRow({ item, merchants, onResolved }) {
             {Math.round(item.confidence * 100)}% {item.suggested_name ? `· ${item.suggested_name}` : ''}
           </span>
         ) : (
-          <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>sem sugestão</span>
+          <span style={{ color: 'var(--text-faint)', fontSize: '0.78rem' }}>sem sugestão</span>
         )}
       </td>
       <td style={{ padding: '8px 12px', minWidth: 220 }}>
@@ -159,7 +160,7 @@ function ReviewQueueTab({ merchants, onMerchantsChange }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem', flexWrap: 'wrap', gap: 8 }}>
         <div>
           <h3 style={{ ...s.h2, marginBottom: '0.4rem' }}>🔍 Fila de Revisão</h3>
-          <p style={{ color: '#64748b', fontSize: '0.85rem', margin: 0 }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
             Lançamentos que o ML ainda não conseguiu resolver com confiança suficiente (≥ 85%).
             Confirme o comerciante correto — cada confirmação vira dado de treino.
           </p>
@@ -176,9 +177,9 @@ function ReviewQueueTab({ merchants, onMerchantsChange }) {
       )}
 
       {loading ? (
-        <p style={{ color: '#94a3b8' }}>Carregando...</p>
+        <p style={{ color: 'var(--text-faint)' }}>Carregando...</p>
       ) : items.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-faint)' }}>
           <div style={{ fontSize: '2rem', marginBottom: 8 }}>✅</div>
           <p>Nenhum lançamento pendente de revisão.</p>
         </div>
@@ -186,9 +187,9 @@ function ReviewQueueTab({ merchants, onMerchantsChange }) {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
             <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+              <tr style={{ background: 'var(--bg-subtle)', borderBottom: '2px solid var(--border)' }}>
                 {['Lançamento', 'Data', 'Valor', 'Sugestão ML', 'Resolver', ''].map(h => (
-                  <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -214,6 +215,7 @@ function MerchantsTab({ merchants, onMerchantsChange }) {
   const [creating, setCreating]     = useState(false);
   const [aliasInputs, setAliasInputs] = useState({}); // merchantId -> texto
   const [addingAlias, setAddingAlias] = useState(null);
+  const [savingCategory, setSavingCategory] = useState(null);
 
   useEffect(() => {
     categoryService.list().then(r => setCategories(r.data));
@@ -241,6 +243,16 @@ function MerchantsTab({ merchants, onMerchantsChange }) {
       setAliasInputs(prev => ({ ...prev, [merchantId]: '' }));
     } finally {
       setAddingAlias(null);
+    }
+  };
+
+  const changeCategory = async (merchantId, categoryId) => {
+    setSavingCategory(merchantId);
+    try {
+      await merchantService.updateCategory(merchantId, categoryId ? Number(categoryId) : null);
+      onMerchantsChange(prev => prev.map(m => m.id === merchantId ? { ...m, category_id: categoryId ? Number(categoryId) : null } : m));
+    } finally {
+      setSavingCategory(null);
     }
   };
 
@@ -273,12 +285,23 @@ function MerchantsTab({ merchants, onMerchantsChange }) {
       <div style={s.card}>
         <h3 style={s.h2}>📋 Comerciantes Cadastrados ({merchants.length})</h3>
         {merchants.length === 0 ? (
-          <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Nenhum comerciante ainda. Crie um acima ou resolva itens na fila de revisão.</p>
+          <p style={{ color: 'var(--text-faint)', fontSize: '0.85rem' }}>Nenhum comerciante ainda. Crie um acima ou resolva itens na fila de revisão.</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {merchants.map(m => (
-              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 12px', background: '#f8fafc', borderRadius: 8 }}>
-                <strong style={{ color: '#1e293b', minWidth: 160 }}>{m.name}</strong>
+              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 12px', background: 'var(--bg-subtle)', borderRadius: 8 }}>
+                <strong style={{ color: 'var(--text-primary)', minWidth: 160 }}>{m.name}</strong>
+                <select
+                  style={{ ...s.select, width: 170, opacity: savingCategory === m.id ? 0.6 : 1 }}
+                  value={m.category_id ?? ''}
+                  disabled={savingCategory === m.id}
+                  onChange={e => changeCategory(m.id, e.target.value)}
+                >
+                  <option value="">Sem categoria</option>
+                  {expenseCategories.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
                 <input
                   style={{ ...s.input, flex: 1, minWidth: 180 }}
                   placeholder="Adicionar alias (nome bruto do extrato)"
@@ -286,7 +309,7 @@ function MerchantsTab({ merchants, onMerchantsChange }) {
                   onChange={e => setAliasInputs(prev => ({ ...prev, [m.id]: e.target.value }))}
                   onKeyDown={e => e.key === 'Enter' && addAlias(m.id)}
                 />
-                <button onClick={() => addAlias(m.id)} disabled={addingAlias === m.id} style={s.btn('#f1f5f9', '#64748b')}>
+                <button onClick={() => addAlias(m.id)} disabled={addingAlias === m.id} style={s.btn('var(--bg-page)', 'var(--text-muted)')}>
                   {addingAlias === m.id ? '...' : '+ Alias'}
                 </button>
               </div>
@@ -310,22 +333,25 @@ export default function MerchantsPage() {
   }, []);
 
   return (
-    <div style={s.page}>
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <h1 style={{ margin: 0, fontSize: '1.4rem', color: '#1e293b' }}>🏪 Comerciantes</h1>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[['review', '🔍 Fila de Revisão'], ['merchants', '🏬 Comerciantes']].map(([t, label]) => (
-              <button key={t} onClick={() => setTab(t)}
-                style={s.btn(tab === t ? '#6366f1' : '#f1f5f9', tab === t ? '#fff' : '#64748b')}>
-                {label}
-              </button>
-            ))}
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <Header showBack />
+      <div style={s.page}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h1 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-primary)' }}>🏪 Comerciantes</h1>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[['review', '🔍 Fila de Revisão'], ['merchants', '🏬 Comerciantes']].map(([t, label]) => (
+                <button key={t} onClick={() => setTab(t)}
+                  style={s.btn(tab === t ? '#6366f1' : 'var(--bg-subtle)', tab === t ? '#fff' : 'var(--text-muted)')}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {tab === 'review' && <ReviewQueueTab merchants={merchants} onMerchantsChange={setMerchants} />}
-        {tab === 'merchants' && <MerchantsTab merchants={merchants} onMerchantsChange={setMerchants} />}
+          {tab === 'review' && <ReviewQueueTab merchants={merchants} onMerchantsChange={setMerchants} />}
+          {tab === 'merchants' && <MerchantsTab merchants={merchants} onMerchantsChange={setMerchants} />}
+        </div>
       </div>
     </div>
   );

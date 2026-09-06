@@ -17,7 +17,7 @@ public class AiService(DbConnectionFactory db, FinancialContextPlugin contextPlu
         Environment.GetEnvironmentVariable("GROQ_API_KEY") ?? "";
 
     private readonly string _groqModel =
-        Environment.GetEnvironmentVariable("GROQ_MODEL") ?? "llama-3.1-8b-instant";
+        Environment.GetEnvironmentVariable("GROQ_MODEL") ?? "openai/gpt-oss-20b";
 
     private readonly string _ollamaUrl =
         Environment.GetEnvironmentVariable("OLLAMA_URL") ?? "http://localhost:11434";

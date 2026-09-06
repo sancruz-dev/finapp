@@ -254,6 +254,16 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
         return new Merchant { Id = id, UserId = userId, Name = req.Name, CategoryId = req.CategoryId };
     }
 
+    public async Task<bool> UpdateMerchantCategoryAsync(int merchantId, int? categoryId, int userId)
+    {
+        using var conn = db.Create();
+        var rows = await conn.ExecuteAsync(@"
+            UPDATE merchants SET category_id = @CategoryId
+            WHERE id = @Id AND user_id = @UserId",
+            new { CategoryId = categoryId, Id = merchantId, UserId = userId });
+        return rows > 0;
+    }
+
     public async Task AddAliasAsync(int merchantId, string rawName, int userId)
     {
         var cleanName = CleanRawName(rawName);
@@ -303,7 +313,7 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
     public async Task<IEnumerable<ReviewQueueItem>> GetReviewQueueAsync(int userId)
     {
         using var conn = db.Create();
-        return await conn.QueryAsync<ReviewQueueItem>(@"
+        var items = (await conn.QueryAsync<ReviewQueueItem>(@"
             SELECT
                 q.id,
                 q.transaction_id,
@@ -318,7 +328,33 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
             JOIN transactions t ON t.id = q.transaction_id
             WHERE q.user_id = @UserId AND q.status = 'pending'
             ORDER BY q.created_at DESC",
-            new { UserId = userId });
+            new { UserId = userId })).ToList();
+
+        // A sugestão gravada é uma foto do momento em que o item entrou na fila.
+        // O modelo pode ter mudado desde então (novos comerciantes, retreinos,
+        // exclusões) — recalcula ao vivo antes de devolver, e atualiza o registro
+        // salvo para não ficar desatualizado de novo na próxima leitura.
+        foreach (var item in items)
+        {
+            var prediction = await PredictAsync(item.RawName, userId);
+            item.SuggestedName = prediction.MerchantName;
+            item.Confidence    = prediction.Confidence;
+
+            await conn.ExecuteAsync(@"
+                UPDATE merchant_review_queue
+                SET suggested_merchant_id = @MerchantId,
+                    suggested_name        = @MerchantName,
+                    confidence            = @Confidence
+                WHERE id = @Id",
+                new {
+                    MerchantId   = prediction.MerchantId,
+                    MerchantName = prediction.MerchantName,
+                    Confidence   = prediction.Confidence,
+                    Id           = item.Id,
+                });
+        }
+
+        return items;
     }
 
     // ── Treino do modelo ML.NET ────────────────────────────────────────────

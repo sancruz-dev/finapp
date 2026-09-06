@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { aiService } from '../services/Aiservice.js';
+import Markdown from './Markdown';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -35,7 +36,11 @@ function MessageBubble({ msg }) {
         ...msgStyles.bubble,
         ...(isUser ? msgStyles.userBubble : msgStyles.assistantBubble),
       }}>
-        <p style={msgStyles.text}>{msg.content}</p>
+        {isUser ? (
+          <p style={msgStyles.text}>{msg.content}</p>
+        ) : (
+          <div style={msgStyles.text}><Markdown content={msg.content} /></div>
+        )}
         {msg.created_at && (
           <span style={msgStyles.time}>{timeAgo(msg.created_at)}</span>
         )}
@@ -49,11 +54,7 @@ function MessageBubble({ msg }) {
 
 const styles = {
   sidebar: {
-    width: 340,
-    minWidth: 340,
-    height: '100vh',
     position: 'sticky',
-    top: 0,
     display: 'flex',
     flexDirection: 'column',
     background: 'linear-gradient(180deg, #0f0f1a 0%, #13131f 60%, #0f0f1a 100%)',
@@ -61,6 +62,17 @@ const styles = {
     fontFamily: "'Segoe UI', system-ui, sans-serif",
     overflow: 'hidden',
     boxShadow: '-4px 0 24px rgba(0,0,0,0.3)',
+    flexShrink: 0,
+  },
+  resizeHandle: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: 6,
+    cursor: 'ew-resize',
+    zIndex: 10,
+    background: 'transparent',
   },
 
   header: {
@@ -363,7 +375,7 @@ const msgStyles = {
     letterSpacing: '0.02em',
   },
   bubble: {
-    maxWidth: '80%',
+    maxWidth: '88%',
     borderRadius: 12,
     padding: '10px 13px',
   },
@@ -394,6 +406,17 @@ const msgStyles = {
   },
 };
 
+// ── Redimensionamento do painel ─────────────────────────────────────────────
+
+const MIN_WIDTH = 300;
+const MAX_WIDTH = 600;
+const DEFAULT_WIDTH = 340;
+const WIDTH_STORAGE_KEY = 'ai-sidebar-width';
+
+function clampWidth(w) {
+  return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, w));
+}
+
 // ── Sugestões de perguntas ─────────────────────────────────────────────────
 
 const SUGGESTIONS = [
@@ -405,15 +428,48 @@ const SUGGESTIONS = [
 
 // ── Componente principal ───────────────────────────────────────────────────
 
-export default function AiSidebar() {
+export default function AiSidebar({ topOffset = 0 }) {
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingChats, setLoadingChats] = useState(true);
+  const [width, setWidth] = useState(() => {
+    const saved = parseInt(localStorage.getItem(WIDTH_STORAGE_KEY), 10);
+    return Number.isFinite(saved) ? clampWidth(saved) : DEFAULT_WIDTH;
+  });
+  const [resizing, setResizing] = useState(false);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+
+  useEffect(() => {
+    localStorage.setItem(WIDTH_STORAGE_KEY, String(width));
+  }, [width]);
+
+  const startResize = useCallback((e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = width;
+    setResizing(true);
+
+    const onMouseMove = (ev) => {
+      const delta = startX - ev.clientX;
+      setWidth(clampWidth(startWidth + delta));
+    };
+    const onMouseUp = () => {
+      setResizing(false);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }, [width]);
 
   // Carrega lista de chats
   const loadChats = useCallback(async () => {
@@ -578,9 +634,19 @@ export default function AiSidebar() {
         .ai-chat-list::-webkit-scrollbar { width: 3px; }
         .ai-chat-list::-webkit-scrollbar-track { background: transparent; }
         .ai-chat-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+        .ai-resize-handle:hover, .ai-resize-handle.resizing {
+          background: rgba(99,102,241,0.45) !important;
+        }
       `}</style>
 
-      <aside style={styles.sidebar}>
+      <aside style={{ ...styles.sidebar, width, top: topOffset, height: `calc(100vh - ${topOffset}px)` }}>
+
+        <div
+          className={`ai-resize-handle${resizing ? ' resizing' : ''}`}
+          style={styles.resizeHandle}
+          onMouseDown={startResize}
+          title="Arraste para redimensionar"
+        />
 
         {/* ── Header ── */}
         <div style={styles.header}>

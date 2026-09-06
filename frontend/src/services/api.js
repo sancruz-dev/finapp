@@ -51,6 +51,7 @@ export const merchantService = {
   resolve: (data) => api.post('/merchants/review-queue/resolve', data),
   backfill: () => api.post('/merchants/backfill'),
   predict: (name) => api.get('/merchants/predict', { params: { name } }),
+  updateCategory: (merchantId, categoryId) => api.put(`/merchants/${merchantId}/category`, { category_id: categoryId }),
 };
 
 export default api;

@@ -8,9 +8,11 @@ import {
   ResponsiveContainer, Legend
 } from 'recharts';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { useTransactions } from '../hooks/useTransactions';
 import TransactionModal from '../components/TransactionModal';
 import AiSidebar from '../components/AiSidebar';
+import { HEADER_HEIGHT } from '../components/Header';
 
 dayjs.locale('pt-br');
 
@@ -36,6 +38,7 @@ const TYPE_CONFIG = {
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [date, setDate] = useState(dayjs());
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -74,7 +77,8 @@ export default function Dashboard() {
   const s = {
     page: {
       minHeight: '100vh',
-      background: '#f1f5f9',
+      paddingTop: HEADER_HEIGHT,
+      background: 'var(--bg-page)',
       fontFamily: "'Segoe UI', system-ui, sans-serif",
       display: 'flex',
       flexDirection: 'column',
@@ -90,21 +94,26 @@ export default function Dashboard() {
       overflowY: 'auto',
     },
     header: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 100,
       background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-      color: '#fff', padding: '0 2rem', height: 60,
+      color: '#fff', padding: '0 2rem', height: HEADER_HEIGHT,
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       boxShadow: '0 2px 8px rgba(99,102,241,0.35)',
       flexShrink: 0,
     },
     content: { maxWidth: 1100, margin: '0 auto', padding: '2rem 1.5rem' },
-    card: { background: '#fff', borderRadius: 14, boxShadow: '0 1px 6px rgba(0,0,0,0.07)' },
+    card: { background: 'var(--bg-card)', borderRadius: 14, boxShadow: '0 1px 6px rgba(0,0,0,0.07)' },
     btn: (bg = '#6366f1', color = '#fff') => ({
       background: bg, color, border: 'none', borderRadius: 8,
       padding: '8px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem',
     }),
     select: {
-      padding: '7px 10px', borderRadius: 7, border: '1px solid #e2e8f0',
-      fontSize: '0.85rem', background: '#fff', color: '#334155', cursor: 'pointer',
+      padding: '7px 10px', borderRadius: 7, border: '1px solid var(--border)',
+      fontSize: '0.85rem', background: 'var(--input-bg)', color: 'var(--text-secondary)', cursor: 'pointer',
     },
     aiToggle: {
       background: aiOpen ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.12)',
@@ -120,6 +129,21 @@ export default function Dashboard() {
       gap: 6,
       transition: 'all 0.15s',
     },
+    themeToggle: {
+      background: 'rgba(255,255,255,0.14)',
+      border: '1px solid rgba(255,255,255,0.22)',
+      borderRadius: 8,
+      width: 32,
+      height: 32,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      cursor: 'pointer',
+      fontSize: '1rem',
+      lineHeight: 1,
+      color: '#fff',
+      padding: 0,
+    },
   };
 
   return (
@@ -130,6 +154,13 @@ export default function Dashboard() {
         <span style={{ fontWeight: 700, fontSize: '1.1rem', letterSpacing: '-0.3px' }}>💰 FinApp</span>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <span style={{ fontSize: '0.9rem', opacity: 0.85 }}>{user?.name}</span>
+          <button
+            onClick={toggleTheme}
+            style={s.themeToggle}
+            title={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
           <button
             onClick={() => setAiOpen(o => !o)}
             style={s.aiToggle}
@@ -153,11 +184,11 @@ export default function Dashboard() {
             {/* Navegação de mês */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <button onClick={() => setDate(d => d.subtract(1, 'month'))} style={s.btn('#fff', '#334155')}>‹</button>
-                <strong style={{ fontSize: '1.05rem', textTransform: 'capitalize', minWidth: 130, textAlign: 'center' }}>
+                <button onClick={() => setDate(d => d.subtract(1, 'month'))} style={s.btn('var(--bg-card)', 'var(--text-secondary)')}>‹</button>
+                <strong style={{ fontSize: '1.05rem', textTransform: 'capitalize', minWidth: 130, textAlign: 'center', color: 'var(--text-primary)' }}>
                   {date.format('MMMM YYYY')}
                 </strong>
-                <button onClick={() => setDate(d => d.add(1, 'month'))} style={s.btn('#fff', '#334155')}>›</button>
+                <button onClick={() => setDate(d => d.add(1, 'month'))} style={s.btn('var(--bg-card)', 'var(--text-secondary)')}>›</button>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => { setEditing(null); setShowModal(true); }} style={s.btn()}>
@@ -180,7 +211,7 @@ export default function Dashboard() {
                 { label: 'Saldo',    value: summary?.balance,       color: '#6366f1', bg: '#eef2ff', border: '#c7d2fe' },
               ].map(({ label, value, color, bg, border }) => (
                 <div key={label} style={{ ...s.card, padding: '1.25rem 1.5rem', background: bg, border: `1px solid ${border}` }}>
-                  <p style={{ margin: 0, color: '#64748b', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</p>
+                  <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</p>
                   <p style={{ margin: '6px 0 0', fontSize: '1.6rem', fontWeight: 800, color, lineHeight: 1 }}>{fmt(value)}</p>
                 </div>
               ))}
@@ -189,7 +220,7 @@ export default function Dashboard() {
             {/* Gráficos */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.75rem' }}>
               <div style={{ ...s.card, padding: '1.5rem' }}>
-                <h3 style={{ margin: '0 0 1rem', fontSize: '0.95rem', color: '#1e293b' }}>Gastos por Categoria</h3>
+                <h3 style={{ margin: '0 0 1rem', fontSize: '0.95rem', color: 'var(--text-primary)' }}>Gastos por Categoria</h3>
                 {summary?.by_category?.length > 0 ? (
                   <div style={{ width: '100%', height: 220 }}>
                     <ResponsiveContainer width="100%" height="100%">
@@ -203,14 +234,14 @@ export default function Dashboard() {
                     </ResponsiveContainer>
                   </div>
                 ) : (
-                  <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.875rem' }}>
+                  <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', fontSize: '0.875rem' }}>
                     Nenhuma despesa neste mês
                   </div>
                 )}
               </div>
 
               <div style={{ ...s.card, padding: '1.5rem' }}>
-                <h3 style={{ margin: '0 0 1rem', fontSize: '0.95rem', color: '#1e293b' }}>Receitas vs Despesas</h3>
+                <h3 style={{ margin: '0 0 1rem', fontSize: '0.95rem', color: 'var(--text-primary)' }}>Receitas vs Despesas</h3>
                 <div style={{ width: '100%', height: 220 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
@@ -237,14 +268,14 @@ export default function Dashboard() {
             {/* Lista de transações */}
             <div style={s.card}>
               <div style={{
-                padding: '1rem 1.5rem', borderBottom: '1px solid #f1f5f9',
+                padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-light)',
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 flexWrap: 'wrap', gap: 10,
               }}>
-                <h3 style={{ margin: 0, fontSize: '0.95rem', color: '#1e293b' }}>
+                <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
                   Transações
                   {filtered.length !== transactions.length && (
-                    <span style={{ marginLeft: 8, fontSize: '0.78rem', color: '#94a3b8', fontWeight: 400 }}>
+                    <span style={{ marginLeft: 8, fontSize: '0.78rem', color: 'var(--text-faint)', fontWeight: 400 }}>
                       ({filtered.length} de {transactions.length})
                     </span>
                   )}
@@ -264,7 +295,7 @@ export default function Dashboard() {
                   </select>
                   {(filterType || filterCategory) && (
                     <button onClick={() => { setFilterType(''); setFilterCategory(''); }}
-                      style={{ ...s.btn('#f1f5f9', '#64748b'), fontWeight: 500 }}>
+                      style={{ ...s.btn('var(--bg-subtle)', 'var(--text-muted)'), fontWeight: 500 }}>
                       ✕ Limpar
                     </button>
                   )}
@@ -272,9 +303,9 @@ export default function Dashboard() {
               </div>
 
               {loading ? (
-                <p style={{ textAlign: 'center', padding: '2.5rem', color: '#94a3b8' }}>Carregando...</p>
+                <p style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-faint)' }}>Carregando...</p>
               ) : filtered.length === 0 ? (
-                <p style={{ textAlign: 'center', padding: '2.5rem', color: '#94a3b8' }}>
+                <p style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-faint)' }}>
                   {transactions.length === 0 ? 'Nenhuma transação neste mês' : 'Nenhuma transação para os filtros selecionados'}
                 </p>
               ) : filtered.map((tx, idx) => {
@@ -284,10 +315,10 @@ export default function Dashboard() {
                     key={tx.id}
                     style={{
                       display: 'flex', alignItems: 'center', padding: '0.875rem 1.5rem',
-                      borderBottom: idx < filtered.length - 1 ? '1px solid #f8fafc' : 'none',
+                      borderBottom: idx < filtered.length - 1 ? '1px solid var(--border-light)' : 'none',
                       gap: 12, transition: 'background 0.15s',
                     }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
                     <div style={{
@@ -295,10 +326,10 @@ export default function Dashboard() {
                       background: tx.category_color || '#cbd5e1', flexShrink: 0,
                     }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {tx.description}
                       </p>
-                      <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8', marginTop: 2 }}>
+                      <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-faint)', marginTop: 2 }}>
                         {tx.category_name || 'Sem categoria'} · {dayjs(tx.date).format('DD/MM/YYYY')}
                       </p>
                     </div>
@@ -324,7 +355,7 @@ export default function Dashboard() {
         </div>
 
         {/* ── Sidebar IA (togglável) ── */}
-        {aiOpen && <AiSidebar />}
+        {aiOpen && <AiSidebar topOffset={HEADER_HEIGHT} />}
 
       </div>
 

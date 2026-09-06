@@ -9,6 +9,7 @@ export default function TransactionModal({ initial, onSave, onClose }) {
     description: '',
     date: dayjs().format('YYYY-MM-DD'),
     category_id: '',
+    method: 'credito',
     notes: '',
     ...initial,
     amount: initial?.amount != null ? String(initial.amount) : '',  // amount separado para garantir que string vazia funcione no input
@@ -87,6 +88,17 @@ export default function TransactionModal({ initial, onSave, onClose }) {
                 style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: '1rem', boxSizing: 'border-box', background: 'var(--input-bg)', color: 'var(--text-primary)' }} />
             </div>
           ))}
+
+          {/* Método de pagamento */}
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem' }}>Método de pagamento</label>
+            <select value={form.method} onChange={e => set('method', e.target.value)}
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: '1rem', background: 'var(--input-bg)', color: 'var(--text-primary)' }}>
+              <option value="credito">Crédito</option>
+              <option value="debito">Débito</option>
+              <option value="pix">PIX</option>
+            </select>
+          </div>
 
           {/* Categoria */}
           <div style={{ marginBottom: '1rem' }}>

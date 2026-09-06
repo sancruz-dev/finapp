@@ -39,6 +39,7 @@ public class Transaction
     public decimal Amount { get; set; }
     public string Description { get; set; } = "";
     public DateTime Date { get; set; }
+    public string? Method { get; set; }
     public string? Notes { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
@@ -60,7 +61,8 @@ public record CreateTransactionRequest(
     string Description,
     string Date,
     int? CategoryId,
-    string? Notes);
+    string? Notes,
+    string? Method);
 
 public record UpdateTransactionRequest(
     string Type,
@@ -68,7 +70,8 @@ public record UpdateTransactionRequest(
     string Description,
     string Date,
     int? CategoryId,
-    string? Notes);
+    string? Notes,
+    string? Method);
 
 // ── Category DTOs ──────────────────────────────────────────────────────────
 public record CreateCategoryRequest(
@@ -97,6 +100,7 @@ public class CsvRow
     public decimal Amount { get; set; }
     public string Type { get; set; } = "expense";   // "income" | "expense"
     public string Date { get; set; } = "";          // "YYYY-MM-DD"
+    public string Method { get; set; } = "credito";  // "credito" | "debito" | "pix"
     public int? CategoryId { get; set; }
     public string? CategoryName { get; set; }
     public string? CategoryColor { get; set; }

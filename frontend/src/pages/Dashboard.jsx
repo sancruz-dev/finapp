@@ -36,6 +36,12 @@ const TYPE_CONFIG = {
   refund:  { label: 'Reembolso', color: '#6366f1', sign: '↩' },
 };
 
+const METHOD_LABELS = {
+  credito: 'Crédito',
+  debito: 'Débito',
+  pix: 'PIX',
+};
+
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -331,6 +337,7 @@ export default function Dashboard() {
                       </p>
                       <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-faint)', marginTop: 2 }}>
                         {tx.category_name || 'Sem categoria'} · {dayjs(tx.date).format('DD/MM/YYYY')}
+                        {tx.method && ` · ${METHOD_LABELS[tx.method] || tx.method}`}
                       </p>
                     </div>
                     {tx.type === 'refund' && (

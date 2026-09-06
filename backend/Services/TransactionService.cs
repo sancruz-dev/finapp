@@ -8,7 +8,7 @@ public class TransactionService(DbConnectionFactory db, MerchantNormalizerServic
 {
     // Seleciona colunas explicitamente para evitar colisão entre t.* e aliases do JOIN
     private const string SelectCols = @"
-        t.id, t.user_id, t.category_id, t.type, t.amount, t.description, t.date, t.notes,
+        t.id, t.user_id, t.category_id, t.type, t.amount, t.description, t.date, t.method, t.notes,
         t.created_at, t.updated_at,
         c.name  AS category_name,
         c.color AS category_color,
@@ -52,8 +52,8 @@ public class TransactionService(DbConnectionFactory db, MerchantNormalizerServic
     {
         using var conn = db.Create();
         var id = await conn.ExecuteScalarAsync<int>(@"
-            INSERT INTO transactions (user_id, type, amount, description, date, category_id, notes)
-            VALUES (@UserId, @Type, @Amount, @Description, @Date, @CategoryId, @Notes);
+            INSERT INTO transactions (user_id, type, amount, description, date, category_id, notes, method)
+            VALUES (@UserId, @Type, @Amount, @Description, @Date, @CategoryId, @Notes, @Method);
             SELECT LAST_INSERT_ID();",
             new
             {
@@ -64,6 +64,7 @@ public class TransactionService(DbConnectionFactory db, MerchantNormalizerServic
                 Date = req.Date,
                 CategoryId = req.CategoryId,
                 Notes = req.Notes,
+                Method = req.Method,
             });
 
         // ── Normalização de comerciante (ML) ──────────────────────────────
@@ -87,7 +88,8 @@ public class TransactionService(DbConnectionFactory db, MerchantNormalizerServic
                 description = @Description,
                 date        = @Date,
                 category_id = @CategoryId,
-                notes       = @Notes
+                notes       = @Notes,
+                method      = @Method
             WHERE id = @Id AND user_id = @UserId",
             new
             {
@@ -97,6 +99,7 @@ public class TransactionService(DbConnectionFactory db, MerchantNormalizerServic
                 Date = req.Date,
                 CategoryId = req.CategoryId,
                 Notes = req.Notes,
+                Method = req.Method,
                 Id = id,
                 UserId = userId,
             });

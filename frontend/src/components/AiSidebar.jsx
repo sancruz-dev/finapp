@@ -5,7 +5,12 @@ import Markdown from './Markdown';
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function timeAgo(dateStr) {
-  const diff = Date.now() - new Date(dateStr).getTime();
+  const time = new Date(dateStr).getTime();
+  const diff = Date.now() - time;
+  // Datas inválidas ou absurdamente distantes (ex: backend retornando um
+  // timestamp não inicializado) não fazem sentido para o usuário — melhor
+  // não exibir nada do que mostrar "739863d atrás".
+  if (!Number.isFinite(time) || diff < 0 || diff > 1000 * 60 * 60 * 24 * 365 * 5) return null;
   const m = Math.floor(diff / 60000);
   if (m < 1) return 'agora';
   if (m < 60) return `${m}m atrás`;
@@ -41,7 +46,7 @@ function MessageBubble({ msg }) {
         ) : (
           <div style={msgStyles.text}><Markdown content={msg.content} /></div>
         )}
-        {msg.created_at && (
+        {msg.created_at && timeAgo(msg.created_at) && (
           <span style={msgStyles.time}>{timeAgo(msg.created_at)}</span>
         )}
       </div>
@@ -409,7 +414,7 @@ const msgStyles = {
 // ── Redimensionamento do painel ─────────────────────────────────────────────
 
 const MIN_WIDTH = 300;
-const MAX_WIDTH = 600;
+const MAX_WIDTH = 900;
 const DEFAULT_WIDTH = 340;
 const WIDTH_STORAGE_KEY = 'ai-sidebar-width';
 
@@ -517,6 +522,7 @@ export default function AiSidebar({ topOffset = 0 }) {
   // Deleta chat
   const deleteChat = async (e, chatId) => {
     e.stopPropagation();
+    if (!window.confirm('Tem certeza que deseja excluir esta conversa? Essa ação não pode ser desfeita.')) return;
     try {
       await aiService.deleteChat(chatId);
       setChats(prev => prev.filter(c => c.id !== chatId));
@@ -554,7 +560,9 @@ export default function AiSidebar({ topOffset = 0 }) {
 
     try {
       const res = await aiService.sendMessage(chatId, text);
-      setMessages(prev => [...prev, res.data]);
+      // A resposta acabou de chegar — usamos o horário do cliente em vez do
+      // que o backend devolveu, que às vezes vem com um timestamp inválido.
+      setMessages(prev => [...prev, { ...res.data, created_at: new Date().toISOString() }]);
 
       // Atualiza título do chat na lista
       setChats(prev => prev.map(c =>

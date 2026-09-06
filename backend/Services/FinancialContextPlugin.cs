@@ -38,8 +38,8 @@ public class FinancialContextPlugin(DbConnectionFactory db)
         // Categorias ativas do usuário
         context.Categories = await GetCategoriesAsync(userId);
 
-        // Gastos por comerciante — mês atual e últimos 3 meses
-        context.MerchantSpending = await GetMerchantSpendingAsync(userId, now);
+        // Gastos por comerciante — todo o histórico (sem limite de meses)
+        context.MerchantSpending = await GetMerchantSpendingAsync(userId);
 
         return context;
     }
@@ -111,10 +111,10 @@ public class FinancialContextPlugin(DbConnectionFactory db)
     }
 
     /// <summary>
-    /// Busca gastos agrupados por comerciante para os últimos 3 meses + mês atual.
+    /// Busca gastos agrupados por comerciante para todo o histórico do usuário.
     /// Só inclui transações que já têm merchant_id resolvido.
     /// </summary>
-    private async Task<List<MerchantMonthSpending>> GetMerchantSpendingAsync(int userId, DateTime now)
+    private async Task<List<MerchantMonthSpending>> GetMerchantSpendingAsync(int userId)
     {
         using var conn = db.Create();
 
@@ -130,13 +130,9 @@ public class FinancialContextPlugin(DbConnectionFactory db)
             WHERE t.user_id    = @UserId
               AND t.type       = 'expense'
               AND t.merchant_id IS NOT NULL
-              AND t.date       >= @Since
             GROUP BY m.id, m.name, YEAR(t.date), MONTH(t.date)
             ORDER BY m.name, YEAR(t.date) DESC, MONTH(t.date) DESC",
-            new {
-                UserId = userId,
-                Since  = new DateTime(now.Year, now.Month, 1).AddMonths(-3)
-            });
+            new { UserId = userId });
 
         return rows.ToList();
     }
@@ -227,7 +223,7 @@ public class FinancialContextPlugin(DbConnectionFactory db)
         // ── Gastos por comerciante ───────────────────────────────────────────
         if (ctx.MerchantSpending.Count > 0)
         {
-            sb.AppendLine("--- GASTOS POR COMERCIANTE (últimos 4 meses) ---");
+            sb.AppendLine("--- GASTOS POR COMERCIANTE (todo o histórico) ---");
             sb.AppendLine("Formato: Comerciante | Mês | Qtd compras | Total gasto");
             sb.AppendLine();
 

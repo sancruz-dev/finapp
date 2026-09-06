@@ -94,8 +94,8 @@ public class ImportService(DbConnectionFactory db, CategoryService categoryServi
             if (string.IsNullOrWhiteSpace(row.Description) || row.Amount <= 0) continue;
 
             var id = await conn.ExecuteScalarAsync<int>(@"
-                INSERT INTO transactions (user_id, type, amount, description, date, category_id)
-                VALUES (@UserId, @Type, @Amount, @Description, @Date, @CategoryId);
+                INSERT INTO transactions (user_id, type, amount, description, date, category_id, method)
+                VALUES (@UserId, @Type, @Amount, @Description, @Date, @CategoryId, 'credito');
                 SELECT LAST_INSERT_ID();",
                 new
                 {

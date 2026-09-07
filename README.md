@@ -1,30 +1,55 @@
 # 💰 FinApp — Gestão Financeira Pessoal
 
-Stack: React · Node.js/Express · MySQL
+Stack: React · .NET 8 (ASP.NET Core Web API) · MySQL · ML.NET · Semantic Kernel (Groq / Ollama)
+
+---
+
+## ✨ Funcionalidades
+
+- **Gestão de transações**: CRUD completo, resumo mensal, categorização por palavra-chave
+- **Importação via XLSX**: upload de planilhas com fluxo de preview e confirmação (ClosedXML)
+- **Categorização inteligente de estabelecimentos (ML)**: normalização de nomes de merchants, predição automática de categoria via ML.NET, treinamento por usuário, backfill histórico e fila de revisão para casos de baixa confiança
+- **Assistente de IA (chat)**: chat contextualizado com os dados financeiros do usuário (Semantic Kernel), com suporte a **Groq** (nuvem) ou **Ollama** (modelo local)
+- **Tema Dark/Light**: alternância de tema persistida no navegador
+- **Autenticação JWT**: login/registro com senha criptografada (BCrypt)
 
 ---
 
 ## 🗄️ 1. Banco de dados
 
 ```bash
-mysql -u root -p < backend/schema.sql
+mysql -u root -p < backend/Database/Scripts/schema.sql
+mysql -u root -p < backend/Database/Scripts/schema_merchants.sql
+mysql -u root -p < backend/Database/Scripts/migration_add_method.sql
+# opcional: dados de exemplo
+mysql -u root -p < backend/Database/Scripts/seed_finapp.sql
 ```
 
-Isso cria o banco `finapp` com todas as tabelas e categorias padrão.
+Isso cria o banco `finapp` com as tabelas de transações, categorias, merchants e categorias padrão.
 
 ---
 
-## ⚙️ 2. Backend
+## ⚙️ 2. Backend (.NET 8)
 
 ```bash
 cd backend
 cp .env.example .env
-# Edite o .env com sua senha do MySQL e um JWT_SECRET seguro
+# Edite o .env com sua senha do MySQL, um JWT_SECRET seguro e as chaves de IA
 
-npm install
-npm run dev
+dotnet restore
+dotnet run
 # Rodando em http://localhost:3001
 ```
+
+### Variáveis de ambiente (`.env`)
+| Variável | Descrição |
+|---|---|
+| `PORT` | Porta do backend (padrão 3001) |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Conexão MySQL |
+| `JWT_SECRET`, `JWT_EXPIRES_IN` | Autenticação JWT |
+| `AI_PROVIDER` | `groq` (padrão) ou `ollama` |
+| `GROQ_API_KEY`, `GROQ_MODEL` | Necessário quando `AI_PROVIDER=groq` |
+| `OLLAMA_URL`, `OLLAMA_MODEL` | Necessário quando `AI_PROVIDER=ollama` (padrão `http://localhost:11434`, modelo `phi3`) |
 
 ### Endpoints disponíveis
 | Método | Rota | Descrição |
@@ -39,6 +64,17 @@ npm run dev
 | GET | /api/categories | Listar categorias |
 | POST | /api/categories | Criar categoria |
 | DELETE | /api/categories/:id | Remover categoria |
+| POST | /api/import/preview | Pré-visualizar importação de XLSX |
+| POST | /api/import/confirm | Confirmar importação de XLSX |
+| GET/POST/DELETE | /api/merchants | CRUD de merchants e aliases |
+| POST | /api/merchants/backfill | Reprocessar transações antigas com ML |
+| GET | /api/merchants/review-queue | Fila de revisão de predições incertas |
+| POST | /api/merchants/review-queue/:id/resolve | Resolver item da fila |
+| POST | /api/merchants/predict | Prever categoria de um merchant |
+| POST | /api/merchants/retrain | Retreinar o modelo ML do usuário |
+| GET/POST/DELETE | /api/ai/chats | Gerenciar conversas de IA |
+| GET/POST | /api/ai/chats/:id/messages | Mensagens do chat |
+| GET | /api/ai/debug/context | Debug do contexto financeiro enviado à IA |
 
 ---
 
@@ -52,6 +88,14 @@ npm start
 ```
 
 O `proxy` no package.json já aponta para `http://localhost:3001`, então não precisa configurar CORS para desenvolvimento local.
+
+### Principais telas
+- **Login** — autenticação
+- **Dashboard** — resumo financeiro, gráficos (Recharts) e transações
+- **Importação** — upload e confirmação de extratos em XLSX
+- **Merchants** — revisão e gestão da categorização automática (ML)
+- **Assistente de IA** — chat lateral com contexto financeiro do usuário
+- Alternância de **tema claro/escuro** no header
 
 ---
 
@@ -96,30 +140,53 @@ Ou use Postman/Insomnia.
 ```
 finapp/
 ├── backend/
-│   ├── schema.sql
+│   ├── FinApp.Api.csproj
+│   ├── Program.cs
+│   ├── appsettings.json
 │   ├── .env.example
-│   ├── package.json
-│   └── src/
-│       ├── server.js
-│       ├── db.js
-│       ├── middleware/auth.js
-│       ├── controllers/
-│       │   ├── authController.js
-│       │   ├── transactionController.js
-│       │   └── categoryController.js
-│       └── routes/index.js
+│   ├── Database/
+│   │   └── Scripts/
+│   │       ├── schema.sql
+│   │       ├── schema_merchants.sql
+│   │       ├── migration_add_method.sql
+│   │       └── seed_finapp.sql
+│   ├── Controllers/
+│   │   ├── AuthController.cs
+│   │   ├── TransactionController.cs
+│   │   ├── CategoryController.cs
+│   │   ├── ImportController.cs
+│   │   ├── MerchantsController.cs
+│   │   └── AiController.cs
+│   ├── Services/
+│   │   ├── AuthService.cs / JwtService.cs
+│   │   ├── TransactionService.cs / CategoryService.cs
+│   │   ├── ImportService.cs
+│   │   ├── MerchantNormalizerService.cs   # ML.NET: predição, treino, backfill
+│   │   ├── AiService.cs                   # Chat IA (Groq/Ollama)
+│   │   └── FinancialContextPlugin.cs      # Contexto financeiro p/ Semantic Kernel
+│   ├── Models/
+│   └── Data/
 └── frontend/
     ├── package.json
     └── src/
         ├── App.jsx
         ├── index.js
-        ├── context/AuthContext.jsx
+        ├── context/
+        │   ├── AuthContext.jsx
+        │   └── ThemeContext.jsx
         ├── hooks/useTransactions.js
-        ├── services/api.js
+        ├── services/
+        │   ├── api.js
+        │   └── Aiservice.js
         ├── pages/
         │   ├── Login.jsx
-        │   └── Dashboard.jsx
+        │   ├── Dashboard.jsx
+        │   ├── ImportPage.jsx
+        │   └── MerchantsPage.jsx
         └── components/
+            ├── Header.jsx
+            ├── AiSidebar.jsx
+            ├── Markdown.jsx
             └── TransactionModal.jsx
 ```
 
@@ -131,5 +198,4 @@ finapp/
 - [ ] Filtros por tipo e categoria na listagem
 - [ ] Gráfico de evolução mensal (linha, últimos 6 meses)
 - [ ] Exportar para CSV
-- [ ] Modo escuro
 - [ ] PWA para acessar pelo celular

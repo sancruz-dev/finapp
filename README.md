@@ -190,12 +190,3 @@ finapp/
             └── TransactionModal.jsx
 ```
 
----
-
-## 🚀 Próximos passos sugeridos
-
-- [ ] Página de categorias (CRUD visual)
-- [ ] Filtros por tipo e categoria na listagem
-- [ ] Gráfico de evolução mensal (linha, últimos 6 meses)
-- [ ] Exportar para CSV
-- [ ] PWA para acessar pelo celular

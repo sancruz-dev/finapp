@@ -15,7 +15,7 @@ public class AuthController(AuthService authService, JwtService jwtService) : Co
         if (user is null) return Unauthorized(new { error });
 
         var token = jwtService.Generate(user);
-        return Ok(new { token, user = new { user.Id, user.Name, user.Email } });
+        return Ok(new { token, user = new { user.Id, user.Name, user.Email, user.ClosingDay } });
     }
 
     [HttpPost("register")]

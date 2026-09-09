@@ -3,18 +3,15 @@
 -- Rodar após o schema existente
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- Comerciantes canônicos (o nome "oficial" que você define)
+-- Comerciantes canônicos — catálogo GLOBAL, compartilhado por todos os usuários
+-- (sem categoria padrão fixa: a categorização é feita por transação/por usuário)
 CREATE TABLE IF NOT EXISTS merchants (
     id          INT AUTO_INCREMENT PRIMARY KEY,
-    user_id     INT          NOT NULL,
     name        VARCHAR(100) NOT NULL,          -- "Oliveira Mini", "Shopee", "Dia Supermercado"
-    category_id INT          NULL,              -- categoria padrão desse comerciante (FK existente)
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
-    UNIQUE KEY uq_merchant_user_name (user_id, name),
-    FOREIGN KEY (user_id)     REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+    UNIQUE KEY uq_merchant_name (name)
 );
 
 -- Aliases: nomes brutos que já foram resolvidos para um comerciante canônico

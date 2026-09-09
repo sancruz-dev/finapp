@@ -69,6 +69,7 @@ CREATE TABLE `categories` (
   `type` enum('income','expense') COLLATE utf8mb4_unicode_ci NOT NULL,
   `color` varchar(7) COLLATE utf8mb4_unicode_ci DEFAULT '#6366f1',
   `icon` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `monthly_limit` decimal(10,2) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
@@ -105,19 +106,26 @@ CREATE TABLE `transactions` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,
   `category_id` int DEFAULT NULL,
+  `subcategory_id` int DEFAULT NULL,
   `type` enum('income','expense','refund') COLLATE utf8mb4_unicode_ci NOT NULL,
   `amount` decimal(10,2) NOT NULL,
   `description` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `date` date NOT NULL,
-  `method` enum('credito','debito','pix') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `method` enum('credito','debito','pix','vr','cedula') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `installment` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `late_processing` tinyint(1) NOT NULL DEFAULT 0,
+  `fixed` enum('S','N') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'N',
   `notes` text COLLATE utf8mb4_unicode_ci,
+  `details` text COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
   KEY `category_id` (`category_id`),
+  KEY `subcategory_id` (`subcategory_id`),
   CONSTRAINT `transactions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `transactions_ibfk_2` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL
+  CONSTRAINT `transactions_ibfk_2` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `transactions_ibfk_3` FOREIGN KEY (`subcategory_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=262 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -133,6 +141,7 @@ CREATE TABLE `users` (
   `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `email` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
   `password_hash` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `closing_day` tinyint NOT NULL DEFAULT '1',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`)

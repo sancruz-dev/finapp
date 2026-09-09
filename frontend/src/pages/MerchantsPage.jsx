@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { merchantService, categoryService } from '../services/api';
+import { merchantService } from '../services/api';
 import Header, { HEADER_HEIGHT } from '../components/Header';
 
 const fmt = (v) =>
@@ -51,7 +51,7 @@ function ReviewRow({ item, merchants, onResolved }) {
 
   const resolve = async () => {
     if (choice === '__new__' && !newName.trim()) {
-      setError('Informe um nome para o novo comerciante.');
+      setError('Informe um nome para a nova pessoa/comércio.');
       return;
     }
     setLoading(true); setError('');
@@ -88,7 +88,7 @@ function ReviewRow({ item, merchants, onResolved }) {
       <td style={{ padding: '8px 12px', minWidth: 220 }}>
         <div style={{ display: 'flex', gap: 6 }}>
           <select value={choice} onChange={e => setChoice(e.target.value)} style={{ ...s.select, flex: 1 }}>
-            <option value="__new__">+ Novo comerciante</option>
+            <option value="__new__">+ Nova pessoa/comércio</option>
             {merchants.map(m => (
               <option key={m.id} value={m.id}>{m.name}</option>
             ))}
@@ -97,7 +97,7 @@ function ReviewRow({ item, merchants, onResolved }) {
         {choice === '__new__' && (
           <input
             style={{ ...s.input, width: '100%', marginTop: 6 }}
-            placeholder="Nome do comerciante"
+            placeholder="Nome da pessoa/comércio"
             value={newName}
             onChange={e => setNewName(e.target.value)}
           />
@@ -162,11 +162,11 @@ function ReviewQueueTab({ merchants, onMerchantsChange }) {
           <h3 style={{ ...s.h2, marginBottom: '0.4rem' }}>🔍 Fila de Revisão</h3>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
             Lançamentos que o ML ainda não conseguiu resolver com confiança suficiente (≥ 85%).
-            Confirme o comerciante correto — cada confirmação vira dado de treino.
+            Confirme a pessoa/comércio correto — cada confirmação vira dado de treino.
           </p>
         </div>
         <button onClick={runBackfill} disabled={backfilling} style={s.btn('#818cf8')}>
-          {backfilling ? 'Processando...' : '⚙️ Processar histórico sem comerciante'}
+          {backfilling ? 'Processando...' : '⚙️ Processar histórico sem pessoa/comércio'}
         </button>
       </div>
 
@@ -206,29 +206,22 @@ function ReviewQueueTab({ merchants, onMerchantsChange }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// Aba: Comerciantes (CRUD + aliases manuais)
+// Aba: Pessoas & Comércios (CRUD + aliases manuais)
 // ══════════════════════════════════════════════════════════════════════════
 function MerchantsTab({ merchants, onMerchantsChange }) {
-  const [categories, setCategories] = useState([]);
   const [newName, setNewName]       = useState('');
-  const [newCategory, setNewCategory] = useState('');
   const [creating, setCreating]     = useState(false);
   const [aliasInputs, setAliasInputs] = useState({}); // merchantId -> texto
   const [addingAlias, setAddingAlias] = useState(null);
-  const [savingCategory, setSavingCategory] = useState(null);
-
-  useEffect(() => {
-    categoryService.list().then(r => setCategories(r.data));
-  }, []);
 
   const create = async () => {
     if (!newName.trim()) return;
     setCreating(true);
     try {
-      await merchantService.create({ name: newName.trim(), category_id: newCategory ? Number(newCategory) : null });
+      await merchantService.create({ name: newName.trim() });
       const res = await merchantService.list();
       onMerchantsChange(res.data);
-      setNewName(''); setNewCategory('');
+      setNewName('');
     } finally {
       setCreating(false);
     }
@@ -246,22 +239,13 @@ function MerchantsTab({ merchants, onMerchantsChange }) {
     }
   };
 
-  const changeCategory = async (merchantId, categoryId) => {
-    setSavingCategory(merchantId);
-    try {
-      await merchantService.updateCategory(merchantId, categoryId ? Number(categoryId) : null);
-      onMerchantsChange(prev => prev.map(m => m.id === merchantId ? { ...m, category_id: categoryId ? Number(categoryId) : null } : m));
-    } finally {
-      setSavingCategory(null);
-    }
-  };
-
-  const expenseCategories = categories.filter(c => c.type === 'expense');
-
   return (
     <>
       <div style={s.card}>
-        <h3 style={s.h2}>🏬 Novo Comerciante</h3>
+        <h3 style={s.h2}>🏬 Nova Pessoa/Comércio</h3>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>
+          Pessoas & Comércios são globais — compartilhados entre todos os usuários. A categoria é definida por lançamento, não na pessoa/comércio.
+        </p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input
             style={{ ...s.input, flex: 1, minWidth: 200 }}
@@ -270,12 +254,6 @@ function MerchantsTab({ merchants, onMerchantsChange }) {
             onChange={e => setNewName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && create()}
           />
-          <select style={s.select} value={newCategory} onChange={e => setNewCategory(e.target.value)}>
-            <option value="">Sem categoria padrão</option>
-            {expenseCategories.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
           <button onClick={create} disabled={creating} style={s.btn()}>
             {creating ? '...' : '+ Criar'}
           </button>
@@ -283,25 +261,14 @@ function MerchantsTab({ merchants, onMerchantsChange }) {
       </div>
 
       <div style={s.card}>
-        <h3 style={s.h2}>📋 Comerciantes Cadastrados ({merchants.length})</h3>
+        <h3 style={s.h2}>📋 Pessoas & Comércios Cadastrados ({merchants.length})</h3>
         {merchants.length === 0 ? (
-          <p style={{ color: 'var(--text-faint)', fontSize: '0.85rem' }}>Nenhum comerciante ainda. Crie um acima ou resolva itens na fila de revisão.</p>
+          <p style={{ color: 'var(--text-faint)', fontSize: '0.85rem' }}>Nenhuma pessoa/comércio ainda. Crie uma acima ou resolva itens na fila de revisão.</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {merchants.map(m => (
               <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 12px', background: 'var(--bg-subtle)', borderRadius: 8 }}>
                 <strong style={{ color: 'var(--text-primary)', minWidth: 160 }}>{m.name}</strong>
-                <select
-                  style={{ ...s.select, width: 170, opacity: savingCategory === m.id ? 0.6 : 1 }}
-                  value={m.category_id ?? ''}
-                  disabled={savingCategory === m.id}
-                  onChange={e => changeCategory(m.id, e.target.value)}
-                >
-                  <option value="">Sem categoria</option>
-                  {expenseCategories.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
                 <input
                   style={{ ...s.input, flex: 1, minWidth: 180 }}
                   placeholder="Adicionar alias (nome bruto do extrato)"
@@ -338,9 +305,9 @@ export default function MerchantsPage() {
       <div style={s.page}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h1 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-primary)' }}>🏪 Comerciantes</h1>
+            <h1 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-primary)' }}>🏪 Pessoas & Comércios</h1>
             <div style={{ display: 'flex', gap: 8 }}>
-              {[['review', '🔍 Fila de Revisão'], ['merchants', '🏬 Comerciantes']].map(([t, label]) => (
+              {[['review', '🔍 Fila de Revisão'], ['merchants', '🏬 Pessoas & Comércios']].map(([t, label]) => (
                 <button key={t} onClick={() => setTab(t)}
                   style={s.btn(tab === t ? '#6366f1' : 'var(--bg-subtle)', tab === t ? '#fff' : 'var(--text-muted)')}>
                   {label}

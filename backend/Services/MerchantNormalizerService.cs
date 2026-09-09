@@ -3,7 +3,6 @@ using FinApp.Api.Data;
 using FinApp.Api.Models;
 using Microsoft.ML;
 using Microsoft.ML.Data;
-using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 namespace FinApp.Api.Services;
@@ -19,15 +18,15 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
 {
     private readonly MLContext _mlContext = new(seed: 42);
 
-    // Este serviço é Singleton (o modelo ML precisa ficar em memória), mas atende
-    // TODOS os usuários — por isso o modelo/engine e o lock de treino são por usuário.
-    private readonly ConcurrentDictionary<int, PredictionEngine<MerchantTrainingData, MerchantPredictionOutput>> _predEngines = new();
-    private readonly ConcurrentDictionary<int, SemaphoreSlim> _trainLocks = new();
+    // O catálogo de merchants/aliases é global (compartilhado por todos os
+    // usuários), então o modelo ML também é único e compartilhado.
+    private PredictionEngine<MerchantTrainingData, MerchantPredictionOutput>? _predEngine;
+    private readonly SemaphoreSlim _trainLock = new(1, 1);
 
-    // Modelos treinados são persistidos em disco para sobreviver a restart da API
+    // Modelo treinado é persistido em disco para sobreviver a restart da API
     // (sem isso, o serviço voltaria a treinar do zero — e sem sugestões — a cada deploy/reinício).
     private static readonly string ModelDirectory = Path.Combine(AppContext.BaseDirectory, "MlModels");
-    private static string ModelPath(int userId) => Path.Combine(ModelDirectory, $"merchant-model-{userId}.zip");
+    private static readonly string ModelPath = Path.Combine(ModelDirectory, "merchant-model.zip");
 
     // Limiar de confiança para resolução automática
     private const float AutoResolveThreshold = 0.85f;
@@ -76,8 +75,8 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
     {
         var cleanName = CleanRawName(rawName);
 
-        // 1. Tenta match exato no banco (mais confiável, sem ML)
-        var exactMatch = await FindExactAliasAsync(rawName, cleanName, userId);
+        // 1. Tenta match exato no banco (mais confiável, sem ML) — catálogo global
+        var exactMatch = await FindExactAliasAsync(rawName, cleanName);
         if (exactMatch is not null)
         {
             return new MerchantPrediction
@@ -90,13 +89,10 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
         }
 
         // 2. Se não tem modelo treinado ainda (nem em memória, nem em disco), retorna sem sugestão
-        if (!_predEngines.TryGetValue(userId, out var predEngine))
+        var predEngine = _predEngine ?? await TryLoadOrTrainModelAsync();
+        if (predEngine is null)
         {
-            predEngine = await TryLoadOrTrainModelAsync(userId);
-            if (predEngine is null)
-            {
-                return new MerchantPrediction { CleanName = cleanName, Confidence = 0f };
-            }
+            return new MerchantPrediction { CleanName = cleanName, Confidence = 0f };
         }
 
         // 3. Predição via ML.NET
@@ -106,7 +102,7 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
         var confidence = output.Score.Length > 0 ? output.Score.Max() : 0f;
 
         // Busca o merchant pelo nome predito
-        var merchant = await FindMerchantByNameAsync(output.PredictedLabel, userId);
+        var merchant = await FindMerchantByNameAsync(output.PredictedLabel);
 
         return new MerchantPrediction
         {
@@ -198,10 +194,11 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
         else if (!string.IsNullOrWhiteSpace(request.NewName))
         {
             merchantId = await conn.ExecuteScalarAsync<int>(@"
-                INSERT INTO merchants (user_id, name, category_id)
-                VALUES (@UserId, @Name, @CategoryId);
+                INSERT INTO merchants (name)
+                VALUES (@Name)
+                ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id);
                 SELECT LAST_INSERT_ID();",
-                new { UserId = userId, Name = request.NewName, CategoryId = request.CategoryId });
+                new { Name = request.NewName });
         }
         else
         {
@@ -229,58 +226,45 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
             new { Id = request.ReviewId });
 
         // Agenda retreino em background (não bloqueia a resposta)
-        _ = Task.Run(() => TrainModelAsync(userId));
+        _ = Task.Run(() => TrainModelAsync());
     }
 
-    // ── CRUD de merchants ──────────────────────────────────────────────────
+    // ── CRUD de merchants (catálogo global) ─────────────────────────────────
 
-    public async Task<IEnumerable<Merchant>> ListMerchantsAsync(int userId)
+    public async Task<IEnumerable<Merchant>> ListMerchantsAsync()
     {
         using var conn = db.Create();
-        return await conn.QueryAsync<Merchant>(
-            "SELECT * FROM merchants WHERE user_id = @UserId ORDER BY name",
-            new { UserId = userId });
+        return await conn.QueryAsync<Merchant>("SELECT * FROM merchants ORDER BY name");
     }
 
-    public async Task<Merchant> CreateMerchantAsync(CreateMerchantRequest req, int userId)
+    public async Task<Merchant> CreateMerchantAsync(CreateMerchantRequest req)
     {
         using var conn = db.Create();
         var id = await conn.ExecuteScalarAsync<int>(@"
-            INSERT INTO merchants (user_id, name, category_id)
-            VALUES (@UserId, @Name, @CategoryId);
+            INSERT INTO merchants (name)
+            VALUES (@Name);
             SELECT LAST_INSERT_ID();",
-            new { UserId = userId, Name = req.Name, CategoryId = req.CategoryId });
+            new { Name = req.Name });
 
-        return new Merchant { Id = id, UserId = userId, Name = req.Name, CategoryId = req.CategoryId };
+        return new Merchant { Id = id, Name = req.Name };
     }
 
-    public async Task<bool> UpdateMerchantCategoryAsync(int merchantId, int? categoryId, int userId)
-    {
-        using var conn = db.Create();
-        var rows = await conn.ExecuteAsync(@"
-            UPDATE merchants SET category_id = @CategoryId
-            WHERE id = @Id AND user_id = @UserId",
-            new { CategoryId = categoryId, Id = merchantId, UserId = userId });
-        return rows > 0;
-    }
-
-    public async Task AddAliasAsync(int merchantId, string rawName, int userId)
+    public async Task AddAliasAsync(int merchantId, string rawName)
     {
         var cleanName = CleanRawName(rawName);
         using var conn = db.Create();
 
-        // Verifica que o merchant pertence ao usuário
-        var owns = await conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM merchants WHERE id = @Id AND user_id = @UserId",
-            new { Id = merchantId, UserId = userId });
-        if (owns == 0) throw new UnauthorizedAccessException();
+        var exists = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM merchants WHERE id = @Id",
+            new { Id = merchantId });
+        if (exists == 0) throw new KeyNotFoundException("Comerciante não encontrado.");
 
         await conn.ExecuteAsync(@"
             INSERT IGNORE INTO merchant_aliases (merchant_id, raw_name, clean_name, source)
             VALUES (@MerchantId, @RawName, @CleanName, 'manual')",
             new { MerchantId = merchantId, RawName = rawName, CleanName = cleanName });
 
-        _ = Task.Run(() => TrainModelAsync(userId));
+        _ = Task.Run(() => TrainModelAsync());
     }
 
     // ── Backfill do histórico ───────────────────────────────────────────────
@@ -363,10 +347,9 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
     /// Treina o modelo com todos os aliases confirmados do usuário.
     /// Chamado automaticamente após cada resolução manual.
     /// </summary>
-    public async Task TrainModelAsync(int userId)
+    public async Task TrainModelAsync()
     {
-        var trainLock = _trainLocks.GetOrAdd(userId, _ => new SemaphoreSlim(1, 1));
-        await trainLock.WaitAsync();
+        await _trainLock.WaitAsync();
         try
         {
             using var conn = db.Create();
@@ -375,9 +358,7 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
                     a.clean_name AS CleanName,
                     m.name       AS Label
                 FROM merchant_aliases a
-                JOIN merchants m ON m.id = a.merchant_id
-                WHERE m.user_id = @UserId",
-                new { UserId = userId })).ToList();
+                JOIN merchants m ON m.id = a.merchant_id")).ToList();
 
             if (trainingData.Count < 5)
             {
@@ -411,20 +392,20 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
 
             var model      = pipeline.Fit(dataView);
             var predEngine = _mlContext.Model.CreatePredictionEngine<MerchantTrainingData, MerchantPredictionOutput>(model);
-            _predEngines[userId] = predEngine;
+            _predEngine = predEngine;
 
             // Persiste em disco para não precisar retreinar do zero a cada restart da API
             try
             {
                 Directory.CreateDirectory(ModelDirectory);
-                _mlContext.Model.Save(model, dataView.Schema, ModelPath(userId));
+                _mlContext.Model.Save(model, dataView.Schema, ModelPath);
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Modelo treinado, mas falhou ao salvar em disco (usuário {UserId}).", userId);
+                logger.LogWarning(ex, "Modelo treinado, mas falhou ao salvar em disco.");
             }
 
-            logger.LogInformation("ML: modelo treinado com {N} aliases (usuário {UserId}).", trainingData.Count, userId);
+            logger.LogInformation("ML: modelo treinado com {N} aliases.", trainingData.Count);
         }
         catch (Exception ex)
         {
@@ -432,7 +413,7 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
         }
         finally
         {
-            trainLock.Release();
+            _trainLock.Release();
         }
     }
 
@@ -443,47 +424,45 @@ public class MerchantNormalizerService(DbConnectionFactory db, ILogger<MerchantN
     /// um modelo já treinado do disco (restart da API), senão treinando do zero
     /// a partir dos aliases confirmados no banco.
     /// </summary>
-    private async Task<PredictionEngine<MerchantTrainingData, MerchantPredictionOutput>?> TryLoadOrTrainModelAsync(int userId)
+    private async Task<PredictionEngine<MerchantTrainingData, MerchantPredictionOutput>?> TryLoadOrTrainModelAsync()
     {
-        var path = ModelPath(userId);
-        if (File.Exists(path))
+        if (File.Exists(ModelPath))
         {
             try
             {
-                var model  = _mlContext.Model.Load(path, out _);
+                var model  = _mlContext.Model.Load(ModelPath, out _);
                 var engine = _mlContext.Model.CreatePredictionEngine<MerchantTrainingData, MerchantPredictionOutput>(model);
-                _predEngines[userId] = engine;
+                _predEngine = engine;
                 return engine;
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Falha ao carregar modelo ML do disco (usuário {UserId}); retreinando.", userId);
+                logger.LogWarning(ex, "Falha ao carregar modelo ML do disco; retreinando.");
             }
         }
 
-        try { await TrainModelAsync(userId); }
+        try { await TrainModelAsync(); }
         catch (Exception ex) { logger.LogWarning(ex, "Não foi possível treinar modelo."); }
 
-        return _predEngines.TryGetValue(userId, out var trained) ? trained : null;
+        return _predEngine;
     }
 
-    private async Task<Merchant?> FindExactAliasAsync(string rawName, string cleanName, int userId)
+    private async Task<Merchant?> FindExactAliasAsync(string rawName, string cleanName)
     {
         using var conn = db.Create();
         return await conn.QueryFirstOrDefaultAsync<Merchant>(@"
             SELECT m.* FROM merchants m
             JOIN merchant_aliases a ON a.merchant_id = m.id
-            WHERE m.user_id = @UserId
-              AND (a.raw_name = @RawName OR a.clean_name = @CleanName)
+            WHERE a.raw_name = @RawName OR a.clean_name = @CleanName
             LIMIT 1",
-            new { UserId = userId, RawName = rawName, CleanName = cleanName });
+            new { RawName = rawName, CleanName = cleanName });
     }
 
-    private async Task<Merchant?> FindMerchantByNameAsync(string name, int userId)
+    private async Task<Merchant?> FindMerchantByNameAsync(string name)
     {
         using var conn = db.Create();
         return await conn.QueryFirstOrDefaultAsync<Merchant>(
-            "SELECT * FROM merchants WHERE user_id = @UserId AND name = @Name LIMIT 1",
-            new { UserId = userId, Name = name });
+            "SELECT * FROM merchants WHERE name = @Name LIMIT 1",
+            new { Name = name });
     }
 }

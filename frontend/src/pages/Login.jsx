@@ -25,22 +25,22 @@ export default function Login() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
-      <div style={{ background: '#fff', padding: '2rem', borderRadius: '12px', boxShadow: '0 2px 16px #0001', width: 360 }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-page)' }}>
+      <div style={{ background: 'var(--bg-card)', color: 'var(--text-primary)', padding: '2rem', borderRadius: '12px', boxShadow: '0 2px 16px rgba(0,0,0,0.15)', width: 360 }}>
         <h2 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>💰 FinApp</h2>
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '1rem' }}>
             <label>Email</label>
             <input
               type="email" value={email} onChange={e => setEmail(e.target.value)}
-              required style={{ display: 'block', width: '100%', padding: '8px', marginTop: 4, borderRadius: 6, border: '1px solid #e2e8f0' }}
+              required style={{ display: 'block', width: '100%', padding: '8px', marginTop: 4, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
             />
           </div>
           <div style={{ marginBottom: '1rem' }}>
             <label>Senha</label>
             <input
               type="password" value={password} onChange={e => setPassword(e.target.value)}
-              required style={{ display: 'block', width: '100%', padding: '8px', marginTop: 4, borderRadius: 6, border: '1px solid #e2e8f0' }}
+              required style={{ display: 'block', width: '100%', padding: '8px', marginTop: 4, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
             />
           </div>
           {error && <p style={{ color: '#ef4444', marginBottom: '1rem' }}>{error}</p>}

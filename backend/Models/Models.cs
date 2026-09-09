@@ -6,6 +6,7 @@ public class User
     public string Name { get; set; } = "";
     public string Email { get; set; } = "";
     public string PasswordHash { get; set; } = "";
+    public int ClosingDay { get; set; } = 1;
     public DateTime CreatedAt { get; set; }
 }
 
@@ -17,6 +18,7 @@ public class Category
     public string Type { get; set; } = "";
     public string Color { get; set; } = "#6366f1";
     public string? Icon { get; set; }
+    public decimal? MonthlyLimit { get; set; }
     public DateTime CreatedAt { get; set; }
 
     // preenchido sob demanda
@@ -35,12 +37,17 @@ public class Transaction
     public int Id { get; set; }
     public int UserId { get; set; }
     public int? CategoryId { get; set; }
+    public int? SubcategoryId { get; set; }
     public string Type { get; set; } = "";
     public decimal Amount { get; set; }
     public string Description { get; set; } = "";
     public DateTime Date { get; set; }
     public string? Method { get; set; }
+    public string? Installment { get; set; }
+    public bool LateProcessing { get; set; }
+    public bool Fixed { get; set; }
     public string? Notes { get; set; }
+    public string? Details { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
@@ -48,6 +55,8 @@ public class Transaction
     public string? CategoryName { get; set; }
     public string? CategoryColor { get; set; }
     public string? CategoryIcon { get; set; }
+    public string? SubcategoryName { get; set; }
+    public string? SubcategoryColor { get; set; }
 }
 
 // ── Auth DTOs ──────────────────────────────────────────────────────────────
@@ -62,7 +71,12 @@ public record CreateTransactionRequest(
     string Date,
     int? CategoryId,
     string? Notes,
-    string? Method);
+    string? Method,
+    string? Installment,
+    int? SubcategoryId,
+    string? Details,
+    bool LateProcessing = false,
+    bool Fixed = false);
 
 public record UpdateTransactionRequest(
     string Type,
@@ -71,7 +85,17 @@ public record UpdateTransactionRequest(
     string Date,
     int? CategoryId,
     string? Notes,
-    string? Method);
+    string? Method,
+    string? Installment,
+    int? SubcategoryId,
+    string? Details,
+    bool LateProcessing = false,
+    bool Fixed = false);
+
+// ── User DTOs ──────────────────────────────────────────────────────────────
+public record UpdateClosingDayRequest(int ClosingDay);
+public record UpdateProfileRequest(string Name);
+public record UpdatePasswordRequest(string CurrentPassword, string NewPassword);
 
 // ── Category DTOs ──────────────────────────────────────────────────────────
 public record CreateCategoryRequest(
@@ -81,15 +105,33 @@ public record CreateCategoryRequest(
     string? Icon);
 
 public record AddKeywordRequest(string Keyword);
+public record UpdateMonthlyLimitRequest(decimal? MonthlyLimit);
 
 // ── Summary ────────────────────────────────────────────────────────────────
 public record SummaryCategory(string Name, string Color, decimal Total);
+
+public record CategoryBudget(int Id, string Name, string Color, decimal MonthlyLimit, decimal Spent);
 
 public record SummaryResponse(
     decimal TotalIncome,
     decimal TotalExpense,
     decimal Balance,
-    IEnumerable<SummaryCategory> ByCategory);
+    IEnumerable<SummaryCategory> ByCategory,
+    DateOnly PeriodStart,
+    DateOnly PeriodEnd,
+    // ── Quebra por método: VR (vale alimentação/refeição) vs demais métodos ──
+    decimal IncomeRegular,
+    decimal IncomeVr,
+    decimal ExpenseRegular,
+    decimal ExpenseVr,
+    decimal BalanceRegular,
+    decimal BalanceVr,
+    // ── Despesas por método de pagamento (crédito, débito/pix, VR, cédula) ──
+    decimal ExpenseCredito,
+    decimal ExpenseDebitoPix,
+    decimal ExpenseCedula,
+    // ── Orçamentos: categorias com teto mensal definido ───────────────────
+    IEnumerable<CategoryBudget> Budgets);
 
 // ── CSV Import ─────────────────────────────────────────────────────────────
 
@@ -100,12 +142,17 @@ public class CsvRow
     public decimal Amount { get; set; }
     public string Type { get; set; } = "expense";   // "income" | "expense"
     public string Date { get; set; } = "";          // "YYYY-MM-DD"
-    public string Method { get; set; } = "credito";  // "credito" | "debito" | "pix"
+    public string Method { get; set; } = "credito";  // "credito" | "debito" | "pix" | "vr" | "cedula"
     public int? CategoryId { get; set; }
     public string? CategoryName { get; set; }
     public string? CategoryColor { get; set; }
-    public bool IsInstallment { get; set; } = false;       // data fora do mês dominante
+    public int? SubcategoryId { get; set; }
+    public string? SubcategoryName { get; set; }
+    public string? SubcategoryColor { get; set; }
+    public string? Installment { get; set; }       // ex.: "Parcela 10/12", detectado por coluna ou texto
+    public string? Details { get; set; }            // detalhamento livre (ex.: itens de uma compra variada)
     public bool IsRefund { get; set; } = false;       // reembolso/estorno (valor negativo no CSV)
+    public bool Fixed { get; set; } = false;          // transação fixa (aluguel, assinaturas, etc.)
 }
 
 /// <summary>Resultado do parse do CSV devolvido ao frontend para revisão.</summary>
@@ -115,10 +162,14 @@ public class CsvPreviewResponse
     public int Total { get; set; }
     public int Matched { get; set; }   // categorizados automaticamente
     public int Unmatched { get; set; }   // sem categoria
-    public string DominantMonth { get; set; } = "";  // "2026-02" — mês que mais aparece
-    public int Installments { get; set; }   // lançamentos fora do mês dominante
+    public int Installments { get; set; }   // lançamentos com parcelamento detectado
     public int Refunds { get; set; }   // reembolsos/estornos detectados
 }
 
 /// <summary>Payload enviado pelo frontend após revisão para confirmar importação.</summary>
-public record ImportConfirmRequest(List<CsvRow> Rows);
+/// <param name="Force">Ignora a checagem de parcelamento duplicado (usado após o usuário decidir manter ou remover).</param>
+public record ImportConfirmRequest(List<CsvRow> Rows, bool Force = false);
+
+// ── Duplicidade de parcelamento ───────────────────────────────────────────
+public record InstallmentDuplicateExisting(int Id, string Description, DateTime Date, string? Installment, decimal Amount);
+public record InstallmentDuplicate(string Description, int Total, List<InstallmentDuplicateExisting> Existing);

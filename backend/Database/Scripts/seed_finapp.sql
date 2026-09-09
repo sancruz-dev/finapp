@@ -73,7 +73,7 @@ UNLOCK TABLES;
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'Usu├írio 1','user1@finapp.local','$2b$10$placeholder','2026-03-04 13:44:09'),(2,'Usu├írio 2','user2@finapp.local','$2b$10$placeholder','2026-03-04 13:44:09'),(3,'San','sancruz.dev@gmail.com','$2a$10$5jAitYI5uQuvFSuK8FnfkuVztAtBbTSmadaDZEyH2RR1CCp3MmTBi','2026-03-04 14:09:18'),(4,'Sara Sousa','sarasousa@gmail.com','$2a$10$TIc8p6cBbyLzv9MwsG/KnOwBKNdsZMYqj.XdT6bciUtOPHVM8S60C','2026-03-07 23:14:46');
+INSERT INTO `users` (`id`,`name`,`email`,`password_hash`,`closing_day`,`created_at`) VALUES (1,'Usu├írio 1','user1@finapp.local','$2b$10$placeholder',1,'2026-03-04 13:44:09'),(2,'Usu├írio 2','user2@finapp.local','$2b$10$placeholder',1,'2026-03-04 13:44:09'),(3,'San','sancruz.dev@gmail.com','$2a$10$5jAitYI5uQuvFSuK8FnfkuVztAtBbTSmadaDZEyH2RR1CCp3MmTBi',1,'2026-03-04 14:09:18'),(4,'Sara Sousa','sarasousa@gmail.com','$2a$10$TIc8p6cBbyLzv9MwsG/KnOwBKNdsZMYqj.XdT6bciUtOPHVM8S60C',27,'2026-03-07 23:14:46');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

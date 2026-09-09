@@ -24,6 +24,14 @@ public class CategoryController(CategoryService svc) : ControllerBase
     public async Task<IActionResult> Delete(int id)
         => await svc.DeleteAsync(id, UserId) ? Ok(new { message = "Removido" }) : NotFound();
 
+    [HttpPatch("{id:int}/monthly-limit")]
+    public async Task<IActionResult> UpdateMonthlyLimit(int id, [FromBody] UpdateMonthlyLimitRequest req)
+    {
+        var cat = await svc.UpdateMonthlyLimitAsync(id, UserId, req.MonthlyLimit);
+        if (cat is null) return BadRequest(new { error = "Categoria não encontrada ou teto inválido" });
+        return Ok(cat);
+    }
+
     // ── Keywords ───────────────────────────────────────────────────────────
 
     [HttpPost("{categoryId:int}/keywords")]

@@ -14,29 +14,21 @@ public class MerchantsController(MerchantNormalizerService merchantService) : Co
 
     // ── Merchants canônicos ──────────────────────────────────────────────
 
-    /// Lista todos os comerciantes do usuário
+    /// Lista todos os comerciantes (catálogo global)
     [HttpGet]
     public async Task<IActionResult> List()
-        => Ok(await merchantService.ListMerchantsAsync(UserId));
+        => Ok(await merchantService.ListMerchantsAsync());
 
     /// Cria um comerciante canônico manualmente
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateMerchantRequest req)
-        => Ok(await merchantService.CreateMerchantAsync(req, UserId));
-
-    /// Atualiza a categoria padrão de um comerciante existente
-    [HttpPut("{id}/category")]
-    public async Task<IActionResult> UpdateCategory(int id, [FromBody] UpdateMerchantCategoryRequest req)
-    {
-        var ok = await merchantService.UpdateMerchantCategoryAsync(id, req.CategoryId, UserId);
-        return ok ? Ok(new { message = "Categoria atualizada." }) : NotFound();
-    }
+        => Ok(await merchantService.CreateMerchantAsync(req));
 
     /// Adiciona um alias (nome bruto) a um comerciante existente
     [HttpPost("{id}/aliases")]
     public async Task<IActionResult> AddAlias(int id, [FromBody] AddAliasRequest req)
     {
-        await merchantService.AddAliasAsync(id, req.RawName, UserId);
+        await merchantService.AddAliasAsync(id, req.RawName);
         return Ok(new { message = "Alias adicionado e modelo retreinado." });
     }
 
@@ -74,7 +66,7 @@ public class MerchantsController(MerchantNormalizerService merchantService) : Co
     [HttpPost("retrain")]
     public async Task<IActionResult> Retrain()
     {
-        await merchantService.TrainModelAsync(UserId);
+        await merchantService.TrainModelAsync();
         return Ok(new { message = "Modelo retreinado." });
     }
 }

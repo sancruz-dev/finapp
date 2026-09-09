@@ -5,9 +5,7 @@ namespace FinApp.Api.Models;
 public class Merchant
 {
     public int     Id         { get; set; }
-    public int     UserId     { get; set; }
     public string  Name       { get; set; } = "";
-    public int?    CategoryId { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
@@ -53,13 +51,6 @@ public class MerchantPrediction
 public class CreateMerchantRequest
 {
     public string  Name       { get; set; } = "";
-    public int?    CategoryId { get; set; }
-}
-
-/// Atualização da categoria padrão de um comerciante existente
-public class UpdateMerchantCategoryRequest
-{
-    public int? CategoryId { get; set; }
 }
 
 /// Resolução manual de um item da fila de revisão
@@ -68,7 +59,6 @@ public class ResolveReviewRequest
     public int    ReviewId   { get; set; }
     public int?   MerchantId { get; set; }   // ID de um merchant existente, OU
     public string? NewName   { get; set; }   // criar novo merchant com esse nome
-    public int?    CategoryId { get; set; }  // categoria do novo merchant
 }
 
 /// Item da fila de revisão para exibição na tela

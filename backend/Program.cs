@@ -18,6 +18,7 @@ var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "changeme_su
 // ── Serviços ───────────────────────────────────────────────────────────────
 builder.Services.AddSingleton<DbConnectionFactory>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<CategoryService>();
 builder.Services.AddScoped<ImportService>();

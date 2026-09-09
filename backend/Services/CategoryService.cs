@@ -68,6 +68,20 @@ public class CategoryService(DbConnectionFactory db)
         return rows > 0;
     }
 
+    public async Task<Category?> UpdateMonthlyLimitAsync(int id, int userId, decimal? monthlyLimit)
+    {
+        if (monthlyLimit is < 0) return null;
+
+        using var conn = db.Create();
+        var rows = await conn.ExecuteAsync(
+            "UPDATE categories SET monthly_limit = @MonthlyLimit WHERE id = @Id AND user_id = @UserId AND type = 'expense'",
+            new { MonthlyLimit = monthlyLimit, Id = id, UserId = userId });
+        if (rows == 0) return null;
+
+        return await conn.QueryFirstOrDefaultAsync<Category>(
+            "SELECT * FROM categories WHERE id = @Id", new { Id = id });
+    }
+
     // ── Keywords ───────────────────────────────────────────────────────────
 
     public async Task<CategoryKeyword?> AddKeywordAsync(int categoryId, int userId, string keyword)

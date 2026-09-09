@@ -37,10 +37,21 @@ export const transactionService = {
   summary: (params) => api.get('/transactions/summary', { params }),
 };
 
+export const userService = {
+  me: () => api.get('/users/me'),
+  updateClosingDay: (closingDay) => api.patch('/users/me/closing-day', { closing_day: closingDay }),
+  updateProfile: (name) => api.patch('/users/me/profile', { name }),
+  updatePassword: (currentPassword, newPassword) =>
+    api.patch('/users/me/password', { current_password: currentPassword, new_password: newPassword }),
+};
+
 export const categoryService = {
   list: () => api.get('/categories'),
   create: (data) => api.post('/categories', data),
   remove: (id) => api.delete(`/categories/${id}`),
+  updateMonthlyLimit: (id, monthlyLimit) => api.patch(`/categories/${id}/monthly-limit`, { monthly_limit: monthlyLimit }),
+  addKeyword: (id, keyword) => api.post(`/categories/${id}/keywords`, { keyword }),
+  removeKeyword: (keywordId) => api.delete(`/categories/keywords/${keywordId}`),
 };
 
 export const merchantService = {
@@ -51,7 +62,6 @@ export const merchantService = {
   resolve: (data) => api.post('/merchants/review-queue/resolve', data),
   backfill: () => api.post('/merchants/backfill'),
   predict: (name) => api.get('/merchants/predict', { params: { name } }),
-  updateCategory: (merchantId, categoryId) => api.put(`/merchants/${merchantId}/category`, { category_id: categoryId }),
 };
 
 export default api;

@@ -41,7 +41,7 @@ services:
       OLLAMA_URL: ${OLLAMA_URL:-}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-}
     ports:
-      - "3002:3002"
+      - "3002:3001"
     depends_on:
       mysql:
         condition: service_healthy

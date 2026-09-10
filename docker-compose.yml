@@ -1,0 +1,67 @@
+# Compose de desenvolvimento: builda as imagens a partir do código-fonte
+# local (./backend, ./frontend). Para distribuição/instalação a partir das
+# imagens já publicadas no Docker Hub, use docker-compose.prod.yml.
+#
+# Uso: docker compose up -d --build
+
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/Database/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - finapp
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    image: sancruzdocker/finapp-backend:latest
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      AI_PROVIDER: ${AI_PROVIDER:-groq}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-}
+      OLLAMA_URL: ${OLLAMA_URL:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-}
+    ports:
+      - "3002:3001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - finapp
+
+  frontend:
+    image: sancruzdocker/finapp-frontend:latest
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend
+    networks:
+      - finapp
+
+networks:
+  finapp:
+
+volumes:
+  mysql_data:

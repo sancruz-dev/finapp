@@ -34,4 +34,12 @@ public class InvestmentController(InvestmentService svc) : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
         => await svc.DeleteAsync(id, UserId) ? Ok(new { message = "Removido" }) : NotFound();
+
+    [HttpPost("{id:int}/movements")]
+    public async Task<IActionResult> AddMovement(int id, [FromBody] CreateMovementRequest req)
+    {
+        var (result, error) = await svc.AddMovementAsync(id, UserId, req);
+        if (error is not null) return BadRequest(new { error });
+        return result is null ? NotFound() : StatusCode(201, result);
+    }
 }

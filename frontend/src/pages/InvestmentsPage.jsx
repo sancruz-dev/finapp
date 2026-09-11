@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import dayjs from 'dayjs';
 import Header, { HEADER_HEIGHT } from '../components/Header';
 import InvestmentModal from '../components/InvestmentModal';
+import InvestmentMovementModal from '../components/InvestmentMovementModal';
 import { useInvestments } from '../hooks/useInvestments';
+
+const MOVEMENT_LABELS = { APORTE: { label: 'Aporte', color: '#22c55e', sign: '+' }, RESGATE: { label: 'Resgate', color: '#ef4444', sign: '−' } };
 
 const fmt = (v) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -25,9 +28,11 @@ const s = {
 };
 
 export default function InvestmentsPage() {
-  const { investments, summary, loading, add, update, remove } = useInvestments();
+  const { investments, summary, loading, add, update, remove, addMovement } = useInvestments();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [movementTarget, setMovementTarget] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
 
   const handleSave = async (data) => {
     if (editing) { await update(editing.id, data); setEditing(null); }
@@ -36,6 +41,7 @@ export default function InvestmentsPage() {
   };
   const handleEdit = (inv) => { setEditing(inv); setShowModal(true); };
   const handleDelete = async (id) => { if (window.confirm('Remover este investimento?')) await remove(id); };
+  const toggleExpanded = (id) => setExpandedId(cur => cur === id ? null : id);
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -74,28 +80,61 @@ export default function InvestmentsPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ borderBottom: '2px solid var(--border-light)' }}>
-                      {['Instituição', 'Tipo', 'Indexador', 'Aplicado em', 'Valor aplicado', 'Valor bruto', 'Valor líquido', 'Vencimento', ''].map(h => (
+                      {['', 'Instituição', 'Tipo', 'Indexador', 'Aplicado em', 'Valor aplicado', 'Valor bruto', 'Valor líquido', 'Vencimento', ''].map(h => (
                         <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {investments.map(inv => (
-                      <tr key={inv.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                    {investments.map(inv => {
+                      const isExpanded = expandedId === inv.id;
+                      return (
+                      <React.Fragment key={inv.id}>
+                      <tr style={{ borderBottom: isExpanded ? 'none' : '1px solid var(--border-light)' }}>
+                        <td style={{ padding: '10px 4px', textAlign: 'center' }}>
+                          <button onClick={() => toggleExpanded(inv.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-faint)' }} title="Ver movimentações">
+                            {isExpanded ? '▾' : '▸'}
+                          </button>
+                        </td>
                         <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-primary)' }}>{inv.institution}</td>
                         <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>{ASSET_TYPE_LABELS[inv.asset_type] || inv.asset_type}</td>
                         <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>{indexerLabel(inv)}</td>
                         <td style={{ padding: '10px 12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{dayjs(inv.applied_at).format('DD/MM/YYYY')}</td>
-                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{fmt(inv.principal_amount)}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{fmt(inv.net_contributed)}</td>
                         <td style={{ padding: '10px 12px', color: '#22c55e', fontWeight: 600, whiteSpace: 'nowrap' }}>{fmt(inv.gross_value)}</td>
                         <td style={{ padding: '10px 12px', color: '#6366f1', fontWeight: 600, whiteSpace: 'nowrap' }}>{fmt(inv.net_value)}</td>
                         <td style={{ padding: '10px 12px', color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>{inv.maturity_at ? dayjs(inv.maturity_at).format('DD/MM/YYYY') : '—'}</td>
                         <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                          <button onClick={() => setMovementTarget(inv)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95rem', marginRight: 8 }} title="Aporte/Resgate">💰</button>
                           <button onClick={() => handleEdit(inv)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95rem', marginRight: 8 }} title="Editar">✏️</button>
                           <button onClick={() => handleDelete(inv.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95rem' }} title="Remover">🗑️</button>
                         </td>
                       </tr>
-                    ))}
+                      {isExpanded && (
+                        <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+                          <td></td>
+                          <td colSpan={8} style={{ padding: '4px 12px 14px' }}>
+                            <div style={{ background: 'var(--bg-subtle)', borderRadius: 8, padding: '10px 14px' }}>
+                              <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Movimentações</p>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '4px 0', color: 'var(--text-secondary)' }}>
+                                <span>{dayjs(inv.applied_at).format('DD/MM/YYYY')} — Aplicação inicial</span>
+                                <span style={{ fontWeight: 600 }}>{fmt(inv.principal_amount)}</span>
+                              </div>
+                              {inv.movements.length === 0 ? (
+                                <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: 'var(--text-faint)' }}>Nenhum aporte ou resgate além da aplicação inicial.</p>
+                              ) : inv.movements.map(m => (
+                                <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '4px 0', color: 'var(--text-secondary)' }}>
+                                  <span>{dayjs(m.date).format('DD/MM/YYYY')} — {MOVEMENT_LABELS[m.type].label}</span>
+                                  <span style={{ fontWeight: 600, color: MOVEMENT_LABELS[m.type].color }}>{MOVEMENT_LABELS[m.type].sign} {fmt(m.amount)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -109,6 +148,14 @@ export default function InvestmentsPage() {
           initial={editing}
           onSave={handleSave}
           onClose={() => { setShowModal(false); setEditing(null); }}
+        />
+      )}
+
+      {movementTarget && (
+        <InvestmentMovementModal
+          investment={movementTarget}
+          onSave={(data) => addMovement(movementTarget.id, data)}
+          onClose={() => setMovementTarget(null)}
         />
       )}
     </div>

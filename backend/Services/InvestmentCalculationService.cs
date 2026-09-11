@@ -4,83 +4,147 @@ namespace FinApp.Api.Services;
 
 /// <summary>
 /// Calcula o valor bruto e líquido atual de um investimento a partir das taxas históricas
-/// do indexador — nada é persistido, o valor é sempre recalculado na leitura.
+/// do indexador — nada é persistido, o valor é sempre recalculado na leitura. Suporta uma
+/// aplicação inicial + qualquer número de aportes/resgates posteriores (cada um datado).
 /// </summary>
 public class InvestmentCalculationService(BacenRateService rates)
 {
-    public async Task<(decimal Gross, decimal Net)> CalculateAsync(Investment inv)
+    public async Task<(decimal Gross, decimal Net, decimal NetContributed)> CalculateAsync(Investment inv, List<InvestmentMovement> movements)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var appliedAt = DateOnly.FromDateTime(inv.AppliedAt);
+        var timeline = BuildTimeline(inv, movements);
 
-        var gross = appliedAt >= today
-            ? inv.PrincipalAmount
-            : await CalculateGrossAsync(inv, appliedAt, today);
-
-        var net = CalculateNet(inv, gross, appliedAt, today);
-        return (Math.Round(gross, 2), Math.Round(net, 2));
+        var gross = await CalculateGrossAsync(inv, timeline, today);
+        var (totalAmount, effectiveDayNumber) = CalculateWeightedPosition(timeline, today);
+        var net = CalculateNet(inv, gross, totalAmount, effectiveDayNumber, today);
+        return (Math.Round(gross, 2), Math.Round(net, 2), Math.Round(totalAmount, 2));
     }
 
-    private async Task<decimal> CalculateGrossAsync(Investment inv, DateOnly appliedAt, DateOnly today)
-        => inv.Indexer switch
+    // Aplicação inicial + cada aporte (positivo)/resgate (negativo), em ordem cronológica —
+    // em caso de empate na data, a aplicação inicial vem antes, depois a ordem de criação.
+    private static List<(DateOnly Date, decimal Delta)> BuildTimeline(Investment inv, List<InvestmentMovement> movements)
+    {
+        var events = new List<(DateOnly Date, decimal Delta, int Order)>
         {
-            "CDI" or "SELIC" => await CompoundDailyAsync(inv, appliedAt, today),
-            "PREFIXADO" => CompoundPrefixado(inv, appliedAt, today),
-            "POUPANCA" => await CompoundPoupancaAsync(inv, appliedAt, today),
+            (DateOnly.FromDateTime(inv.AppliedAt), inv.PrincipalAmount, -1)
+        };
+        events.AddRange(movements.Select(m => (
+            DateOnly.FromDateTime(m.MovementDate),
+            m.Type == "APORTE" ? m.Amount : -m.Amount,
+            m.Id)));
+
+        return events
+            .OrderBy(e => e.Date).ThenBy(e => e.Order)
+            .Select(e => (e.Date, e.Delta))
+            .ToList();
+    }
+
+    // Encadeia os períodos de juros compostos entre cada evento — cresce o saldo do evento
+    // anterior até a data do próximo, aplica o fluxo (aporte soma, resgate subtrai), repete até hoje.
+    private async Task<decimal> CalculateGrossAsync(Investment inv, List<(DateOnly Date, decimal Delta)> timeline, DateOnly today)
+    {
+        var balance = 0m;
+        var cursor = timeline[0].Date;
+        foreach (var (date, delta) in timeline)
+        {
+            balance = await GrowAsync(inv, balance, cursor, date, today);
+            balance += delta;
+            cursor = date;
+        }
+        return await GrowAsync(inv, balance, cursor, today, today);
+    }
+
+    private async Task<decimal> GrowAsync(Investment inv, decimal balance, DateOnly from, DateOnly to, DateOnly today)
+    {
+        if (balance <= 0 || from >= to) return balance;
+        return inv.Indexer switch
+        {
+            "CDI" or "SELIC" => await CompoundDailyAsync(inv.Indexer, inv.IndexerRate, balance, from, to, today),
+            "PREFIXADO" => CompoundPrefixado(inv.IndexerRate, balance, from, to),
+            "POUPANCA" => await CompoundPoupancaAsync(balance, from, to),
             _ => throw new ArgumentException($"Indexador não suportado: {inv.Indexer}")
         };
+    }
 
     // CDI/Selic: juros compostos dia a dia usando a série diária do Bacen × % contratado.
-    private async Task<decimal> CompoundDailyAsync(Investment inv, DateOnly appliedAt, DateOnly today)
+    private async Task<decimal> CompoundDailyAsync(string indexer, decimal? indexerRate, decimal balance, DateOnly from, DateOnly to, DateOnly today)
     {
-        var dailyRates = await rates.GetDailyRatesAsync(inv.Indexer, appliedAt, today);
-        var pct = (inv.IndexerRate ?? 100m) / 100m;
+        var dailyRates = await rates.GetDailyRatesAsync(indexer, from, to);
+        var pct = (indexerRate ?? 100m) / 100m;
 
         var factor = 1m;
         decimal? lastKnownRate = null;
-        var hasToday = false;
+        var hasTo = false;
         foreach (var (date, rate) in dailyRates)
         {
-            if (date <= appliedAt || date > today) continue;
+            if (date <= from || date > to) continue;
             factor *= 1 + (rate / 100m) * pct;
             lastKnownRate = rate;
-            if (date == today) hasToday = true;
+            if (date == to) hasTo = true;
         }
 
         // O Bacen publica a taxa do dia útil com atraso — projeta o dia corrente com a última taxa
-        // conhecida (como os bancos fazem); o valor se autoajusta quando a taxa oficial sai. Não
-        // projeta em fins de semana (sem pregão, sem taxa a publicar).
-        var isWeekend = today.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
-        if (!hasToday && !isWeekend && lastKnownRate is not null)
+        // conhecida (como os bancos fazem) quando o segmento vai até hoje; o valor se autoajusta
+        // quando a taxa oficial sai. Não projeta em fins de semana (sem pregão, sem taxa a publicar).
+        var isWeekend = to.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+        if (to == today && !hasTo && !isWeekend && lastKnownRate is not null)
             factor *= 1 + (lastKnownRate.Value / 100m) * pct;
 
-        return inv.PrincipalAmount * factor;
+        return balance * factor;
     }
 
     // Prefixado: sem série externa — juros compostos por dias corridos sobre a taxa anual contratada.
-    private static decimal CompoundPrefixado(Investment inv, DateOnly appliedAt, DateOnly today)
+    private static decimal CompoundPrefixado(decimal? indexerRate, decimal balance, DateOnly from, DateOnly to)
     {
-        var days = today.DayNumber - appliedAt.DayNumber;
-        var annualRate = (double)(inv.IndexerRate ?? 0m) / 100.0;
+        var days = to.DayNumber - from.DayNumber;
+        var annualRate = (double)(indexerRate ?? 0m) / 100.0;
         var factor = Math.Pow(1 + annualRate, days / 365.0);
-        return inv.PrincipalAmount * (decimal)factor;
+        return balance * (decimal)factor;
     }
 
     // Poupança: só credita rendimento a cada "aniversário" de 30 dias corridos (regra real da caderneta).
-    private async Task<decimal> CompoundPoupancaAsync(Investment inv, DateOnly appliedAt, DateOnly today)
+    private async Task<decimal> CompoundPoupancaAsync(decimal balance, DateOnly from, DateOnly to)
     {
-        var periods = await rates.GetPoupancaPeriodsAsync(appliedAt, today);
+        var periods = await rates.GetPoupancaPeriodsAsync(from, to);
 
         var factor = 1m;
-        var cursor = appliedAt;
+        var cursor = from;
         foreach (var period in periods.OrderBy(p => p.Start))
         {
             if (period.Start != cursor) continue;
-            if (period.End > today) break; // período corrente ainda não completou o aniversário
+            if (period.End > to) break; // período corrente ainda não completou o aniversário
             factor *= 1 + period.Rate / 100m;
             cursor = period.End;
         }
-        return inv.PrincipalAmount * factor;
+        return balance * factor;
+    }
+
+    // "Idade" efetiva do dinheiro hoje, ponderada pelo valor de cada aporte — um resgate reduz a
+    // posição proporcionalmente (não escolhe de qual aporte veio), preservando a idade média do
+    // que resta. Retorna também o total líquido aportado (custo, não composto) usado como base do
+    // rendimento tributável.
+    private static (decimal TotalAmount, int EffectiveDayNumber) CalculateWeightedPosition(List<(DateOnly Date, decimal Delta)> timeline, DateOnly today)
+    {
+        var totalAmount = 0m;
+        var weightedDaySum = 0m;
+        foreach (var (date, delta) in timeline)
+        {
+            if (delta > 0)
+            {
+                weightedDaySum += delta * date.DayNumber;
+                totalAmount += delta;
+            }
+            else if (totalAmount > 0)
+            {
+                var resgate = Math.Min(-delta, totalAmount);
+                var frac = resgate / totalAmount;
+                weightedDaySum -= weightedDaySum * frac;
+                totalAmount -= resgate;
+            }
+        }
+
+        var effectiveDayNumber = totalAmount > 0 ? (int)Math.Round(weightedDaySum / totalAmount) : today.DayNumber;
+        return (totalAmount, effectiveDayNumber);
     }
 
     // Tabela regressiva de IOF (Decreto 6.306/2007, Anexo) — % do rendimento tributado por dia corrido
@@ -90,14 +154,16 @@ public class InvestmentCalculationService(BacenRateService rates)
 
     // IOF regressivo (resgates antes de 30 dias) seguido de IR regressivo sobre o rendimento
     // (isento de IR para LCI/LCA/Poupança — mas LCI/LCA ainda pagam IOF; só a poupança é isenta de ambos).
-    private static decimal CalculateNet(Investment inv, decimal gross, DateOnly appliedAt, DateOnly today)
+    // Com múltiplos aportes/resgates, usa a "idade" efetiva ponderada por valor em vez da data de
+    // aplicação original.
+    private static decimal CalculateNet(Investment inv, decimal gross, decimal totalAmount, int effectiveDayNumber, DateOnly today)
     {
-        var yield = gross - inv.PrincipalAmount;
+        var yield = gross - totalAmount;
         if (yield <= 0) return gross;
 
-        var days = today.DayNumber - appliedAt.DayNumber;
+        var days = Math.Max(0, today.DayNumber - effectiveDayNumber);
 
-        if (inv.AssetType != "POUPANCA" && days < 30)
+        if (inv.AssetType != "POUPANCA" && days is > 0 and < 30)
             yield *= 1 - IofTable[days - 1] / 100m;
 
         var isento = inv.AssetType is "LCI" or "LCA" or "POUPANCA";
@@ -113,6 +179,6 @@ public class InvestmentCalculationService(BacenRateService rates)
             yield *= 1 - aliquota;
         }
 
-        return inv.PrincipalAmount + yield;
+        return totalAmount + yield;
     }
 }

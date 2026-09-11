@@ -74,6 +74,16 @@ public class Investment
     public DateTime CreatedAt { get; set; }
 }
 
+public class InvestmentMovement
+{
+    public int Id { get; set; }
+    public int InvestmentId { get; set; }
+    public string Type { get; set; } = "";   // APORTE | RESGATE
+    public decimal Amount { get; set; }
+    public DateTime MovementDate { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
 // ── Investment DTOs ────────────────────────────────────────────────────────
 public record CreateInvestmentRequest(
     string Institution,
@@ -93,6 +103,17 @@ public record UpdateInvestmentRequest(
     string AppliedAt,
     string? MaturityAt);
 
+public record CreateMovementRequest(
+    string Type,
+    decimal Amount,
+    string Date);
+
+public record MovementResponse(
+    int Id,
+    string Type,
+    decimal Amount,
+    DateTime Date);
+
 public record InvestmentResponse(
     int Id,
     string Institution,
@@ -103,7 +124,9 @@ public record InvestmentResponse(
     DateTime AppliedAt,
     DateTime? MaturityAt,
     decimal GrossValue,
-    decimal NetValue);
+    decimal NetValue,
+    decimal NetContributed,
+    List<MovementResponse> Movements);
 
 public record InvestmentSummaryResponse(
     decimal TotalPrincipal,

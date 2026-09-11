@@ -22,10 +22,13 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<CategoryService>();
 builder.Services.AddScoped<ImportService>();
-builder.Services.AddScoped<FinancialContextPlugin>();  
-builder.Services.AddScoped<AiService>();               
+builder.Services.AddScoped<FinancialContextPlugin>();
+builder.Services.AddScoped<AiService>();
 builder.Services.AddSingleton<JwtService>();
 builder.Services.AddSingleton<MerchantNormalizerService>();
+builder.Services.AddHttpClient<BacenRateService>();
+builder.Services.AddScoped<InvestmentCalculationService>();
+builder.Services.AddScoped<InvestmentService>();
 
 // ── JSON em snake_case ─────────────────────────────────────────────────────
 builder.Services.AddControllers()

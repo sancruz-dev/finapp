@@ -1,0 +1,176 @@
+import React, { useState } from 'react';
+import dayjs from 'dayjs';
+import Header, { HEADER_HEIGHT } from '../components/Header';
+import InvestmentModal from '../components/InvestmentModal';
+import InvestmentMovementModal from '../components/InvestmentMovementModal';
+import { useInvestments } from '../hooks/useInvestments';
+
+const MOVEMENT_LABELS = { APORTE: { label: 'Aporte', color: '#22c55e', sign: '+' }, RESGATE: { label: 'Resgate', color: '#ef4444', sign: '−' } };
+
+const fmt = (v) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+
+const ASSET_TYPE_LABELS = { CDB: 'CDB', LCI: 'LCI', LCA: 'LCA', TESOURO: 'Tesouro Direto', POUPANCA: 'Poupança' };
+
+const indexerLabel = (inv) => {
+  if (inv.indexer === 'POUPANCA') return 'Poupança';
+  if (inv.indexer === 'PREFIXADO') return `${inv.indexer_rate}% a.a. (prefixado)`;
+  return `${inv.indexer_rate}% do ${inv.indexer === 'SELIC' ? 'Selic' : 'CDI'}`;
+};
+
+const s = {
+  page: { flex: 1, background: 'var(--bg-page)', fontFamily: "'Segoe UI', system-ui, sans-serif", padding: '2rem 1.5rem', paddingTop: `calc(2rem + ${HEADER_HEIGHT}px)` },
+  card: { background: 'var(--bg-card)', borderRadius: 14, boxShadow: '0 1px 6px rgba(0,0,0,0.07)' },
+  btn: (bg = '#6366f1', color = '#fff') => ({
+    background: bg, color, border: 'none', borderRadius: 8,
+    padding: '8px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem',
+  }),
+};
+
+export default function InvestmentsPage() {
+  const { investments, summary, loading, add, update, remove, addMovement, updateMovement, removeMovement } = useInvestments();
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [movementModal, setMovementModal] = useState(null); // { investment, movement? }
+  const [expandedId, setExpandedId] = useState(null);
+
+  const handleSave = async (data) => {
+    if (editing) { await update(editing.id, data); setEditing(null); }
+    else await add(data);
+    setShowModal(false);
+  };
+  const handleEdit = (inv) => { setEditing(inv); setShowModal(true); };
+  const handleDelete = async (id) => { if (window.confirm('Remover este investimento?')) await remove(id); };
+  const toggleExpanded = (id) => setExpandedId(cur => cur === id ? null : id);
+
+  const handleSaveMovement = (data) => {
+    const { investment, movement } = movementModal;
+    return movement ? updateMovement(investment.id, movement.id, data) : addMovement(investment.id, data);
+  };
+  const handleDeleteMovement = async (investmentId, movementId) => {
+    if (window.confirm('Remover esta movimentação?')) await removeMovement(investmentId, movementId);
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <Header showBack />
+      <div style={s.page}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h1 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-primary)' }}>💹 Investimentos</h1>
+            <button onClick={() => { setEditing(null); setShowModal(true); }} style={s.btn()}>
+              + Novo Investimento
+            </button>
+          </div>
+
+          {/* Cards de resumo */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.75rem' }}>
+            {[
+              { label: 'Total Aplicado', value: summary?.total_principal, color: 'var(--text-primary)' },
+              { label: 'Valor Bruto Atual', value: summary?.total_gross, color: '#22c55e' },
+              { label: 'Valor Líquido Atual', value: summary?.total_net, color: '#6366f1' },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{ ...s.card, padding: '1.25rem 1.5rem' }}>
+                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</p>
+                <p style={{ margin: '6px 0 0', fontSize: '1.6rem', fontWeight: 800, color, lineHeight: 1 }}>{fmt(value)}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Lista de ativos */}
+          <div style={{ ...s.card, padding: '1.5rem' }}>
+            {loading ? (
+              <p style={{ color: 'var(--text-muted)' }}>Carregando...</p>
+            ) : investments.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)' }}>Nenhum investimento cadastrado ainda.</p>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--border-light)' }}>
+                      {['', 'Instituição', 'Tipo', 'Indexador', 'Aplicado em', 'Valor aplicado', 'Valor bruto', 'Valor líquido', 'Vencimento', ''].map(h => (
+                        <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {investments.map(inv => {
+                      const isExpanded = expandedId === inv.id;
+                      return (
+                      <React.Fragment key={inv.id}>
+                      <tr style={{ borderBottom: isExpanded ? 'none' : '1px solid var(--border-light)' }}>
+                        <td style={{ padding: '10px 4px', textAlign: 'center' }}>
+                          <button onClick={() => toggleExpanded(inv.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-faint)' }} title="Ver movimentações">
+                            {isExpanded ? '▾' : '▸'}
+                          </button>
+                        </td>
+                        <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-primary)' }}>{inv.institution}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>{ASSET_TYPE_LABELS[inv.asset_type] || inv.asset_type}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>{indexerLabel(inv)}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{dayjs(inv.applied_at).format('DD/MM/YYYY')}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{fmt(inv.net_contributed)}</td>
+                        <td style={{ padding: '10px 12px', color: '#22c55e', fontWeight: 600, whiteSpace: 'nowrap' }}>{fmt(inv.gross_value)}</td>
+                        <td style={{ padding: '10px 12px', color: '#6366f1', fontWeight: 600, whiteSpace: 'nowrap' }}>{fmt(inv.net_value)}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>{inv.maturity_at ? dayjs(inv.maturity_at).format('DD/MM/YYYY') : '—'}</td>
+                        <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                          <button onClick={() => setMovementModal({ investment: inv })} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95rem', marginRight: 8 }} title="Aporte/Resgate">💰</button>
+                          <button onClick={() => handleEdit(inv)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95rem', marginRight: 8 }} title="Editar">✏️</button>
+                          <button onClick={() => handleDelete(inv.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95rem' }} title="Remover">🗑️</button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+                          <td></td>
+                          <td colSpan={8} style={{ padding: '4px 12px 14px' }}>
+                            <div style={{ background: 'var(--bg-subtle)', borderRadius: 8, padding: '10px 14px' }}>
+                              <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Movimentações</p>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '4px 0', color: 'var(--text-secondary)' }}>
+                                <span>{dayjs(inv.applied_at).format('DD/MM/YYYY')} — Aplicação inicial</span>
+                                <span style={{ fontWeight: 600 }}>{fmt(inv.principal_amount)}</span>
+                              </div>
+                              {inv.movements.length === 0 ? (
+                                <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: 'var(--text-faint)' }}>Nenhum aporte ou resgate além da aplicação inicial.</p>
+                              ) : inv.movements.map(m => (
+                                <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', padding: '4px 0', color: 'var(--text-secondary)' }}>
+                                  <span>{dayjs(m.date).format('DD/MM/YYYY')} — {MOVEMENT_LABELS[m.type].label}</span>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ fontWeight: 600, color: MOVEMENT_LABELS[m.type].color }}>{MOVEMENT_LABELS[m.type].sign} {fmt(m.amount)}</span>
+                                    <button onClick={() => setMovementModal({ investment: inv, movement: m })} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem' }} title="Editar movimentação">✏️</button>
+                                    <button onClick={() => handleDeleteMovement(inv.id, m.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem' }} title="Remover movimentação">🗑️</button>
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {showModal && (
+        <InvestmentModal
+          initial={editing}
+          onSave={handleSave}
+          onClose={() => { setShowModal(false); setEditing(null); }}
+        />
+      )}
+
+      {movementModal && (
+        <InvestmentMovementModal
+          investment={movementModal.investment}
+          initial={movementModal.movement}
+          onSave={handleSaveMovement}
+          onClose={() => setMovementModal(null)}
+        />
+      )}
+    </div>
+  );
+}

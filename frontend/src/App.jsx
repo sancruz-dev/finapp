@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import ImportPage from './pages/ImportPage';
 import MerchantsPage from './pages/MerchantsPage';
 import SettingsPage from './pages/SettingsPage';
+import InvestmentsPage from './pages/InvestmentsPage';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth();
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/import" element={<ProtectedRoute><ImportPage /></ProtectedRoute>} />
           <Route path="/merchants" element={<ProtectedRoute><MerchantsPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+          <Route path="/investimentos" element={<ProtectedRoute><InvestmentsPage /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

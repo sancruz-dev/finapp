@@ -59,6 +59,57 @@ public class Transaction
     public string? SubcategoryColor { get; set; }
 }
 
+// ── Investment ─────────────────────────────────────────────────────────────
+public class Investment
+{
+    public int Id { get; set; }
+    public int UserId { get; set; }
+    public string Institution { get; set; } = "";
+    public string AssetType { get; set; } = "";   // CDB | LCI | LCA | TESOURO | POUPANCA
+    public string Indexer { get; set; } = "";     // CDI | SELIC | PREFIXADO | POUPANCA
+    public decimal? IndexerRate { get; set; }     // 110 = 110% CDI; taxa a.a. p/ Prefixado; null p/ Poupança
+    public decimal PrincipalAmount { get; set; }
+    public DateTime AppliedAt { get; set; }
+    public DateTime? MaturityAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+// ── Investment DTOs ────────────────────────────────────────────────────────
+public record CreateInvestmentRequest(
+    string Institution,
+    string AssetType,
+    string Indexer,
+    decimal? IndexerRate,
+    decimal PrincipalAmount,
+    string AppliedAt,
+    string? MaturityAt);
+
+public record UpdateInvestmentRequest(
+    string Institution,
+    string AssetType,
+    string Indexer,
+    decimal? IndexerRate,
+    decimal PrincipalAmount,
+    string AppliedAt,
+    string? MaturityAt);
+
+public record InvestmentResponse(
+    int Id,
+    string Institution,
+    string AssetType,
+    string Indexer,
+    decimal? IndexerRate,
+    decimal PrincipalAmount,
+    DateTime AppliedAt,
+    DateTime? MaturityAt,
+    decimal GrossValue,
+    decimal NetValue);
+
+public record InvestmentSummaryResponse(
+    decimal TotalPrincipal,
+    decimal TotalGross,
+    decimal TotalNet);
+
 // ── Auth DTOs ──────────────────────────────────────────────────────────────
 public record LoginRequest(string Email, string Password);
 public record RegisterRequest(string Name, string Email, string Password);

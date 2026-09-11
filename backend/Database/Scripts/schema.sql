@@ -96,6 +96,45 @@ CREATE TABLE `category_keywords` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `indexer_daily_rates`
+--
+
+DROP TABLE IF EXISTS `indexer_daily_rates`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `indexer_daily_rates` (
+  `indexer` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `rate_date` date NOT NULL,
+  `rate` decimal(10,6) NOT NULL,
+  PRIMARY KEY (`indexer`,`rate_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `investments`
+--
+
+DROP TABLE IF EXISTS `investments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `investments` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `institution` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `asset_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `indexer` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `indexer_rate` decimal(6,2) DEFAULT NULL,
+  `principal_amount` decimal(12,2) NOT NULL,
+  `applied_at` date NOT NULL,
+  `maturity_at` date DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `investments_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `transactions`
 --
 

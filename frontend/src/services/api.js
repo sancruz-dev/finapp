@@ -54,6 +54,14 @@ export const categoryService = {
   removeKeyword: (keywordId) => api.delete(`/categories/keywords/${keywordId}`),
 };
 
+export const investmentService = {
+  list: () => api.get('/investments'),
+  summary: () => api.get('/investments/summary'),
+  create: (data) => api.post('/investments', data),
+  update: (id, data) => api.put(`/investments/${id}`, data),
+  remove: (id) => api.delete(`/investments/${id}`),
+};
+
 export const merchantService = {
   list: () => api.get('/merchants'),
   create: (data) => api.post('/merchants', data),

@@ -37,11 +37,23 @@ public class InvestmentCalculationService(BacenRateService rates)
         var pct = (inv.IndexerRate ?? 100m) / 100m;
 
         var factor = 1m;
+        decimal? lastKnownRate = null;
+        var hasToday = false;
         foreach (var (date, rate) in dailyRates)
         {
             if (date <= appliedAt || date > today) continue;
             factor *= 1 + (rate / 100m) * pct;
+            lastKnownRate = rate;
+            if (date == today) hasToday = true;
         }
+
+        // O Bacen publica a taxa do dia útil com atraso — projeta o dia corrente com a última taxa
+        // conhecida (como os bancos fazem); o valor se autoajusta quando a taxa oficial sai. Não
+        // projeta em fins de semana (sem pregão, sem taxa a publicar).
+        var isWeekend = today.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+        if (!hasToday && !isWeekend && lastKnownRate is not null)
+            factor *= 1 + (lastKnownRate.Value / 100m) * pct;
+
         return inv.PrincipalAmount * factor;
     }
 

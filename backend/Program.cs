@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using DbUp;
 using DotNetEnv;
 using FinApp.Api.Data;
 using FinApp.Api.Services;
@@ -65,6 +66,32 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+// ── Migrations de banco (DbUp) ──────────────────────────────────────────────
+// Reusa a mesma lógica de connection string do DbConnectionFactory, para
+// garantir que as migrations rodem contra o mesmo banco usado em runtime.
+var migrationsConnectionString =
+    $"Server={Environment.GetEnvironmentVariable("DB_HOST") ?? "localhost"};" +
+    $"Port={Environment.GetEnvironmentVariable("DB_PORT") ?? "3306"};" +
+    $"Database={Environment.GetEnvironmentVariable("DB_NAME") ?? "finapp"};" +
+    $"Uid={Environment.GetEnvironmentVariable("DB_USER") ?? "root"};" +
+    $"Pwd={Environment.GetEnvironmentVariable("DB_PASSWORD") ?? ""};CharSet=utf8mb4;";
+
+var upgrader = DeployChanges.To
+    .MySqlDatabase(migrationsConnectionString)
+    .WithScriptsEmbeddedInAssembly(typeof(Program).Assembly)
+    .LogToConsole()
+    .Build();
+
+var migrationResult = upgrader.PerformUpgrade();
+
+if (!migrationResult.Successful)
+{
+    Console.Error.WriteLine("[DbUp] Falha ao aplicar migrations: " + migrationResult.Error);
+    Environment.Exit(1);
+}
+
+Console.WriteLine($"[DbUp] {migrationResult.Scripts.Count()} script(s) aplicado(s) com sucesso.");
 
 app.UseCors();
 app.UseAuthentication();

@@ -17,6 +17,13 @@ Stack: React · .NET 8 (ASP.NET Core Web API) · MySQL · ML.NET · Semantic Ker
 
 ## 🗄️ 1. Banco de dados
 
+> Se você vai rodar via Docker (seção "🐳 Deploy com Docker" abaixo), pode pular
+> esta seção — o schema inicial é criado automaticamente na primeira subida do
+> container do MySQL, e mudanças futuras de schema são aplicadas automaticamente
+> pelo backend (via [DbUp](https://dbup.readthedocs.io/)) a cada atualização.
+
+Se for rodar o backend fora do Docker (ex.: `dotnet run` direto), crie o banco manualmente:
+
 ```bash
 mysql -u root -p < backend/Database/Scripts/schema.sql
 mysql -u root -p < backend/Database/Scripts/schema_merchants.sql
@@ -152,6 +159,8 @@ docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d
 docker image prune -f
 ```
+
+**Mudanças de schema no banco (novas tabelas/colunas) são aplicadas automaticamente** — o backend roda suas migrations pendentes (via [DbUp](https://dbup.readthedocs.io/)) assim que o container sobe, antes de aceitar requisições. Não é preciso rodar nenhum `.sql` manualmente para atualizar o banco. Se uma migration falhar, o container não sobe (fica reiniciando) e o banco **não** fica em estado inconsistente — confira `docker compose -f docker-compose.prod.yml logs backend` para diagnosticar.
 
 O `docker image prune -f` remove as imagens antigas que ficam sem tag (`<none>`) após o `pull` — quando uma tag como `frontend:latest` é reatribuída à nova imagem, a versão anterior não é apagada automaticamente, apenas perde a tag. Sem essa limpeza, cada atualização acumula uma imagem órfã na máquina.
 

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
 import {
@@ -8,12 +7,11 @@ import {
   ResponsiveContainer, Legend
 } from 'recharts';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
 import { useTransactions } from '../hooks/useTransactions';
 import { userService } from '../services/api';
 import TransactionModal from '../components/TransactionModal';
 import AiSidebar from '../components/AiSidebar';
-import { HEADER_HEIGHT } from '../components/Header';
+import Header, { HEADER_HEIGHT } from '../components/Header';
 
 dayjs.locale('pt-br');
 
@@ -53,16 +51,15 @@ const EXPENSE_BY_METHOD_COLORS = {
 };
 
 export default function Dashboard() {
-  const { user, logout, updateUser } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { user, updateUser } = useAuth();
   const [date, setDate] = useState(dayjs());
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [aiOpen, setAiOpen] = useState(true);
-  const navigate = useNavigate();
 
   const [filterType, setFilterType] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+  const [filterSubcategory, setFilterSubcategory] = useState('');
   const [searchText, setSearchText] = useState('');
 
   // ── Período: automático (dia de fechamento do cartão) ou range livre ──────
@@ -107,8 +104,16 @@ export default function Dashboard() {
   const handleDelete = async (id) => { if (window.confirm('Remover esta transação?')) await remove(id); };
 
   const filtered = transactions.filter(tx => {
-    if (filterType && tx.type !== filterType) return false;
+    if (filterType) {
+      const [kind, val] = filterType.split(':');
+      if (kind === 'type' && tx.type !== val) return false;
+      if (kind === 'method' && tx.method !== val) return false;
+      if (kind === 'flag' && val === 'late' && !tx.late_processing) return false;
+      if (kind === 'flag' && val === 'fixed' && !tx.fixed) return false;
+      if (kind === 'flag' && val === 'installment' && !tx.installment) return false;
+    }
     if (filterCategory && String(tx.category_id) !== filterCategory) return false;
+    if (filterSubcategory && String(tx.subcategory_id) !== filterSubcategory) return false;
     if (searchText) {
       const q = searchText.trim().toLowerCase();
       const matchesDesc = tx.description?.toLowerCase().includes(q);
@@ -125,6 +130,17 @@ export default function Dashboard() {
         .map(tx => [tx.category_id, { id: tx.category_id, name: tx.category_name, color: tx.category_color }])
     ).values()
   );
+
+  // Subcategorias disponíveis para a categoria selecionada no filtro
+  const subcategoriesForFilter = filterCategory
+    ? Array.from(
+        new Map(
+          transactions
+            .filter(tx => String(tx.category_id) === filterCategory && tx.subcategory_id)
+            .map(tx => [tx.subcategory_id, { id: tx.subcategory_id, name: tx.subcategory_name }])
+        ).values()
+      )
+    : [];
 
   const s = {
     page: {
@@ -144,18 +160,6 @@ export default function Dashboard() {
       flex: 1,
       minWidth: 0,
       overflowY: 'auto',
-    },
-    header: {
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      zIndex: 100,
-      background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-      color: '#fff', padding: '0 2rem', height: HEADER_HEIGHT,
-      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      boxShadow: '0 2px 8px rgba(99,102,241,0.35)',
-      flexShrink: 0,
     },
     content: { maxWidth: 1100, margin: '0 auto', padding: '2rem 1.5rem' },
     card: { background: 'var(--bg-card)', borderRadius: 14, boxShadow: '0 1px 6px rgba(0,0,0,0.07)' },
@@ -181,50 +185,20 @@ export default function Dashboard() {
       gap: 6,
       transition: 'all 0.15s',
     },
-    themeToggle: {
-      background: 'rgba(255,255,255,0.14)',
-      border: '1px solid rgba(255,255,255,0.22)',
-      borderRadius: 8,
-      width: 32,
-      height: 32,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      cursor: 'pointer',
-      fontSize: '1rem',
-      lineHeight: 1,
-      color: '#fff',
-      padding: 0,
-    },
   };
 
   return (
     <div style={s.page}>
 
-      {/* ── Header fixo no topo ── */}
-      <header style={s.header}>
-        <span style={{ fontWeight: 700, fontSize: '1.1rem', letterSpacing: '-0.3px' }}>💰 FinApp</span>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <span style={{ fontSize: '0.9rem', opacity: 0.85 }}>{user?.name}</span>
-          <button
-            onClick={toggleTheme}
-            style={s.themeToggle}
-            title={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
-          >
-            {theme === 'dark' ? '☀️' : '🌙'}
-          </button>
-          <button
-            onClick={() => setAiOpen(o => !o)}
-            style={s.aiToggle}
-            title={aiOpen ? 'Fechar assistente' : 'Abrir assistente IA'}
-          >
-            ✦ {aiOpen ? 'Fechar IA' : 'Assistente IA'}
-          </button>
-          <button onClick={logout} style={{ ...s.btn('rgba(255,255,255,0.18)', '#fff'), fontSize: '0.8rem', padding: '6px 14px' }}>
-            Sair
-          </button>
-        </div>
-      </header>
+      <Header>
+        <button
+          onClick={() => setAiOpen(o => !o)}
+          style={s.aiToggle}
+          title={aiOpen ? 'Fechar assistente' : 'Abrir assistente IA'}
+        >
+          ✦ {aiOpen ? 'Fechar IA' : 'Assistente IA'}
+        </button>
+      </Header>
 
       {/* ── Layout: conteúdo principal + sidebar IA ── */}
       <div style={s.layout}>
@@ -294,18 +268,6 @@ export default function Dashboard() {
                 <button onClick={() => { setEditing(null); setShowModal(true); }} style={s.btn()}>
                   + Nova transação
                 </button>
-                <button onClick={() => navigate('/import')} style={s.btn('#818cf8')}>
-                  📥 Importar CSV
-                </button>
-                <button onClick={() => navigate('/investimentos')} style={s.btn('#818cf8')}>
-                  💹 Investimentos
-                </button>
-                <button onClick={() => navigate('/merchants')} style={s.btn('#818cf8')}>
-                  🏪 Pessoas & Comércios
-                </button>
-                <button onClick={() => navigate('/settings')} style={s.btn('#818cf8')}>
-                  ⚙️ Configurações
-                </button>
               </div>
             </div>
 
@@ -313,21 +275,21 @@ export default function Dashboard() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.75rem' }}>
               {[
                 {
-                  label: 'Receitas', value: summary?.total_income, color: '#22c55e', bg: '#1a2436',
+                  label: 'Receitas', value: summary?.total_income, color: '#22c55e', bg: 'var(--bg-card)',
                   breakdown: [
                     { label: 'Salário', value: summary?.income_regular },
                     { label: 'VR', value: summary?.income_vr },
                   ],
                 },
                 {
-                  label: 'Despesas', value: summary?.total_expense, color: '#ef4444', bg: '#1a2436',
+                  label: 'Despesas', value: summary?.total_expense, color: '#ef4444', bg: 'var(--bg-card)',
                   breakdown: [
                     { label: 'Cartão/Conta', value: summary?.expense_regular },
                     { label: 'VR', value: summary?.expense_vr },
                   ],
                 },
                 {
-                  label: 'Saldo', value: summary?.balance, color: '#6366f1', bg: '#1a2436',
+                  label: 'Saldo', value: summary?.balance, color: '#6366f1', bg: 'var(--bg-card)',
                   breakdown: [
                     { label: 'Cartão/Conta', value: summary?.balance_regular },
                     { label: 'VR', value: summary?.balance_vr },
@@ -459,18 +421,42 @@ export default function Dashboard() {
                   />
                   <select value={filterType} onChange={e => setFilterType(e.target.value)} style={s.select}>
                     <option value="">Todos os tipos</option>
-                    <option value="income">Receitas</option>
-                    <option value="expense">Despesas</option>
-                    <option value="refund">Reembolsos</option>
+                    <optgroup label="Tipo">
+                      <option value="type:income">Receitas</option>
+                      <option value="type:expense">Despesas</option>
+                      <option value="type:refund">Reembolsos</option>
+                    </optgroup>
+                    <optgroup label="Método de pagamento">
+                      {Object.entries(METHOD_LABELS).map(([key, label]) => (
+                        <option key={key} value={`method:${key}`}>{label}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Atributos">
+                      <option value="flag:late">⏱ Processamento tardio</option>
+                      <option value="flag:fixed">📌 Fixos</option>
+                      <option value="flag:installment">🔁 Parcelados</option>
+                    </optgroup>
                   </select>
-                  <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} style={s.select}>
+                  <select
+                    value={filterCategory}
+                    onChange={e => { setFilterCategory(e.target.value); setFilterSubcategory(''); }}
+                    style={s.select}
+                  >
                     <option value="">Todas as categorias</option>
                     {uniqueCategories.map(c => (
                       <option key={c.id} value={String(c.id)}>{c.name}</option>
                     ))}
                   </select>
-                  {(filterType || filterCategory || searchText) && (
-                    <button onClick={() => { setFilterType(''); setFilterCategory(''); setSearchText(''); }}
+                  {filterCategory && subcategoriesForFilter.length > 0 && (
+                    <select value={filterSubcategory} onChange={e => setFilterSubcategory(e.target.value)} style={s.select}>
+                      <option value="">Todas as subcategorias</option>
+                      {subcategoriesForFilter.map(sc => (
+                        <option key={sc.id} value={String(sc.id)}>{sc.name}</option>
+                      ))}
+                    </select>
+                  )}
+                  {(filterType || filterCategory || filterSubcategory || searchText) && (
+                    <button onClick={() => { setFilterType(''); setFilterCategory(''); setFilterSubcategory(''); setSearchText(''); }}
                       style={{ ...s.btn('var(--bg-subtle)', 'var(--text-muted)'), fontWeight: 500 }}>
                       ✕ Limpar
                     </button>

@@ -1,9 +1,16 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
 export const HEADER_HEIGHT = 60;
+
+const MENU_ITEMS = [
+  { path: '/import', icon: '📥', label: 'Importar CSV' },
+  { path: '/investimentos', icon: '💹', label: 'Investimentos' },
+  { path: '/merchants', icon: '🏪', label: 'Pessoas & Comércios' },
+  { path: '/settings', icon: '⚙️', label: 'Configurações' },
+];
 
 const s = {
   header: {
@@ -26,36 +33,102 @@ const s = {
     borderRadius: 8, padding: '6px 12px', cursor: 'pointer',
     fontWeight: 600, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4,
   },
-  right: { display: 'flex', gap: 12, alignItems: 'center' },
+  right: { display: 'flex', gap: 12, alignItems: 'center', position: 'relative' },
   user: { fontSize: '0.9rem', opacity: 0.85 },
-  btn: (bg = 'rgba(255,255,255,0.18)', color = '#fff') => ({
-    background: bg, color, border: 'none', borderRadius: 8,
-    padding: '6px 14px', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem',
-  }),
-  themeToggle: {
+  menuBtn: {
     background: 'rgba(255,255,255,0.14)',
     border: '1px solid rgba(255,255,255,0.22)',
     borderRadius: 8,
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     cursor: 'pointer',
-    fontSize: '1rem',
+    fontSize: '1.1rem',
     lineHeight: 1,
     color: '#fff',
     padding: 0,
   },
+  dropdown: {
+    position: 'absolute',
+    top: HEADER_HEIGHT - 8,
+    right: 0,
+    minWidth: 220,
+    background: 'var(--bg-card)',
+    borderRadius: 10,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+    border: '1px solid var(--border)',
+    padding: 6,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    zIndex: 200,
+  },
+  item: (active) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '9px 12px',
+    borderRadius: 7,
+    border: 'none',
+    background: active ? 'var(--bg-subtle)' : 'transparent',
+    color: 'var(--text-primary)',
+    fontSize: '0.85rem',
+    fontWeight: active ? 700 : 500,
+    cursor: 'pointer',
+    textAlign: 'left',
+    width: '100%',
+  }),
+  divider: { height: 1, background: 'var(--border-light)', margin: '4px 0' },
+  logoutItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '9px 12px',
+    borderRadius: 7,
+    border: 'none',
+    background: 'transparent',
+    color: '#ef4444',
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+    textAlign: 'left',
+    width: '100%',
+  },
 };
+
+const menuHoverStyle = `
+  .header-menu-item:hover { background: var(--bg-subtle) !important; }
+  .header-menu-logout:hover { background: rgba(239, 68, 68, 0.39) !important; }
+  .header-menu-btn:hover { background: rgba(255, 255, 255, 0.42) !important; }
+`;
 
 export default function Header({ showBack = false, children }) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [menuOpen]);
+
+  const go = (path) => {
+    setMenuOpen(false);
+    navigate(path);
+  };
 
   return (
     <header style={s.header}>
+      <style>{menuHoverStyle}</style>
       <div style={s.left}>
         {showBack && (
           <button onClick={() => navigate('/')} style={s.backBtn} title="Voltar ao início">
@@ -64,17 +137,41 @@ export default function Header({ showBack = false, children }) {
         )}
         <span style={s.brand} onClick={() => navigate('/')}>💰 FinApp</span>
       </div>
-      <div style={s.right}>
+      <div style={s.right} ref={menuRef}>
         {children}
-        <button
-          onClick={toggleTheme}
-          style={s.themeToggle}
-          title={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
-        >
-          {theme === 'dark' ? '☀️' : '🌙'}
-        </button>
         <span style={s.user}>{user?.name}</span>
-        <button onClick={logout} style={s.btn()}>Sair</button>
+        <button
+          className="header-menu-btn"
+          onClick={() => setMenuOpen(o => !o)}
+          style={s.menuBtn}
+          title="Menu"
+        >
+          ☰
+        </button>
+
+        {menuOpen && (
+          <div style={s.dropdown}>
+            {MENU_ITEMS.map(item => (
+              <button
+                key={item.path}
+                className="header-menu-item"
+                onClick={() => go(item.path)}
+                style={s.item(location.pathname === item.path)}
+              >
+                <span>{item.icon}</span>{item.label}
+              </button>
+            ))}
+            <div style={s.divider} />
+            <button className="header-menu-item" onClick={() => { toggleTheme(); setMenuOpen(false); }} style={s.item(false)}>
+              <span>{theme === 'dark' ? '☀️' : '🌙'}</span>
+              {theme === 'dark' ? 'Tema claro' : 'Tema escuro'}
+            </button>
+            <div style={s.divider} />
+            <button className="header-menu-logout" onClick={logout} style={s.logoutItem}>
+              <span>🚪</span>Sair
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );

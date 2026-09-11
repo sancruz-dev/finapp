@@ -135,6 +135,28 @@ Ou use Postman/Insomnia.
 
 ---
 
+## 🐳 Deploy com Docker
+
+### Subir o app
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+### Atualizar para uma nova versão
+
+Sempre que uma nova imagem for publicada no Docker Hub:
+
+```bash
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+docker image prune -f
+```
+
+O `docker image prune -f` remove as imagens antigas que ficam sem tag (`<none>`) após o `pull` — quando uma tag como `frontend:latest` é reatribuída à nova imagem, a versão anterior não é apagada automaticamente, apenas perde a tag. Sem essa limpeza, cada atualização acumula uma imagem órfã na máquina.
+
+---
+
 ## 🗂️ Estrutura do projeto
 
 ```

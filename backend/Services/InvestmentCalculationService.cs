@@ -71,23 +71,36 @@ public class InvestmentCalculationService(BacenRateService rates)
         return inv.PrincipalAmount * factor;
     }
 
-    // IR regressivo sobre o rendimento (isento para LCI/LCA/Poupança); IOF não é considerado (fora de escopo da v1).
+    // Tabela regressiva de IOF (Decreto 6.306/2007, Anexo) — % do rendimento tributado por dia corrido
+    // decorrido, do dia 1 (96%) ao dia 29 (3%); a partir do dia 30 a alíquota é 0%. Não se aplica à poupança.
+    private static readonly int[] IofTable =
+        [96, 93, 90, 86, 83, 80, 76, 73, 70, 66, 63, 60, 56, 53, 50, 46, 43, 40, 36, 33, 30, 26, 23, 20, 16, 13, 10, 6, 3];
+
+    // IOF regressivo (resgates antes de 30 dias) seguido de IR regressivo sobre o rendimento
+    // (isento de IR para LCI/LCA/Poupança — mas LCI/LCA ainda pagam IOF; só a poupança é isenta de ambos).
     private static decimal CalculateNet(Investment inv, decimal gross, DateOnly appliedAt, DateOnly today)
     {
         var yield = gross - inv.PrincipalAmount;
         if (yield <= 0) return gross;
 
-        var isento = inv.AssetType is "LCI" or "LCA" or "POUPANCA";
-        if (isento) return gross;
-
         var days = today.DayNumber - appliedAt.DayNumber;
-        var aliquota = days switch
+
+        if (inv.AssetType != "POUPANCA" && days < 30)
+            yield *= 1 - IofTable[days - 1] / 100m;
+
+        var isento = inv.AssetType is "LCI" or "LCA" or "POUPANCA";
+        if (!isento)
         {
-            <= 180 => 0.225m,
-            <= 360 => 0.20m,
-            <= 720 => 0.175m,
-            _ => 0.15m
-        };
-        return inv.PrincipalAmount + yield * (1 - aliquota);
+            var aliquota = days switch
+            {
+                <= 180 => 0.225m,
+                <= 360 => 0.20m,
+                <= 720 => 0.175m,
+                _ => 0.15m
+            };
+            yield *= 1 - aliquota;
+        }
+
+        return inv.PrincipalAmount + yield;
     }
 }

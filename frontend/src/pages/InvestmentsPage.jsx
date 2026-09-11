@@ -28,10 +28,10 @@ const s = {
 };
 
 export default function InvestmentsPage() {
-  const { investments, summary, loading, add, update, remove, addMovement } = useInvestments();
+  const { investments, summary, loading, add, update, remove, addMovement, updateMovement, removeMovement } = useInvestments();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [movementTarget, setMovementTarget] = useState(null);
+  const [movementModal, setMovementModal] = useState(null); // { investment, movement? }
   const [expandedId, setExpandedId] = useState(null);
 
   const handleSave = async (data) => {
@@ -42,6 +42,14 @@ export default function InvestmentsPage() {
   const handleEdit = (inv) => { setEditing(inv); setShowModal(true); };
   const handleDelete = async (id) => { if (window.confirm('Remover este investimento?')) await remove(id); };
   const toggleExpanded = (id) => setExpandedId(cur => cur === id ? null : id);
+
+  const handleSaveMovement = (data) => {
+    const { investment, movement } = movementModal;
+    return movement ? updateMovement(investment.id, movement.id, data) : addMovement(investment.id, data);
+  };
+  const handleDeleteMovement = async (investmentId, movementId) => {
+    if (window.confirm('Remover esta movimentação?')) await removeMovement(investmentId, movementId);
+  };
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -105,7 +113,7 @@ export default function InvestmentsPage() {
                         <td style={{ padding: '10px 12px', color: '#6366f1', fontWeight: 600, whiteSpace: 'nowrap' }}>{fmt(inv.net_value)}</td>
                         <td style={{ padding: '10px 12px', color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>{inv.maturity_at ? dayjs(inv.maturity_at).format('DD/MM/YYYY') : '—'}</td>
                         <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
-                          <button onClick={() => setMovementTarget(inv)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95rem', marginRight: 8 }} title="Aporte/Resgate">💰</button>
+                          <button onClick={() => setMovementModal({ investment: inv })} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95rem', marginRight: 8 }} title="Aporte/Resgate">💰</button>
                           <button onClick={() => handleEdit(inv)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95rem', marginRight: 8 }} title="Editar">✏️</button>
                           <button onClick={() => handleDelete(inv.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95rem' }} title="Remover">🗑️</button>
                         </td>
@@ -123,9 +131,13 @@ export default function InvestmentsPage() {
                               {inv.movements.length === 0 ? (
                                 <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: 'var(--text-faint)' }}>Nenhum aporte ou resgate além da aplicação inicial.</p>
                               ) : inv.movements.map(m => (
-                                <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '4px 0', color: 'var(--text-secondary)' }}>
+                                <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', padding: '4px 0', color: 'var(--text-secondary)' }}>
                                   <span>{dayjs(m.date).format('DD/MM/YYYY')} — {MOVEMENT_LABELS[m.type].label}</span>
-                                  <span style={{ fontWeight: 600, color: MOVEMENT_LABELS[m.type].color }}>{MOVEMENT_LABELS[m.type].sign} {fmt(m.amount)}</span>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ fontWeight: 600, color: MOVEMENT_LABELS[m.type].color }}>{MOVEMENT_LABELS[m.type].sign} {fmt(m.amount)}</span>
+                                    <button onClick={() => setMovementModal({ investment: inv, movement: m })} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem' }} title="Editar movimentação">✏️</button>
+                                    <button onClick={() => handleDeleteMovement(inv.id, m.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem' }} title="Remover movimentação">🗑️</button>
+                                  </span>
                                 </div>
                               ))}
                             </div>
@@ -151,11 +163,12 @@ export default function InvestmentsPage() {
         />
       )}
 
-      {movementTarget && (
+      {movementModal && (
         <InvestmentMovementModal
-          investment={movementTarget}
-          onSave={(data) => addMovement(movementTarget.id, data)}
-          onClose={() => setMovementTarget(null)}
+          investment={movementModal.investment}
+          initial={movementModal.movement}
+          onSave={handleSaveMovement}
+          onClose={() => setMovementModal(null)}
         />
       )}
     </div>

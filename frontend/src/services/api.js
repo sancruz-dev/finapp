@@ -61,6 +61,8 @@ export const investmentService = {
   update: (id, data) => api.put(`/investments/${id}`, data),
   remove: (id) => api.delete(`/investments/${id}`),
   addMovement: (id, data) => api.post(`/investments/${id}/movements`, data),
+  updateMovement: (id, movementId, data) => api.put(`/investments/${id}/movements/${movementId}`, data),
+  removeMovement: (id, movementId) => api.delete(`/investments/${id}/movements/${movementId}`),
 };
 
 export const merchantService = {

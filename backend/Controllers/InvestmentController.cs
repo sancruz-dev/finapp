@@ -42,4 +42,20 @@ public class InvestmentController(InvestmentService svc) : ControllerBase
         if (error is not null) return BadRequest(new { error });
         return result is null ? NotFound() : StatusCode(201, result);
     }
+
+    [HttpPut("{id:int}/movements/{movementId:int}")]
+    public async Task<IActionResult> UpdateMovement(int id, int movementId, [FromBody] CreateMovementRequest req)
+    {
+        var (result, error) = await svc.UpdateMovementAsync(id, movementId, UserId, req);
+        if (error is not null) return BadRequest(new { error });
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpDelete("{id:int}/movements/{movementId:int}")]
+    public async Task<IActionResult> DeleteMovement(int id, int movementId)
+    {
+        var (success, error) = await svc.DeleteMovementAsync(id, movementId, UserId);
+        if (error is not null) return BadRequest(new { error });
+        return success ? Ok(new { message = "Removido" }) : NotFound();
+    }
 }

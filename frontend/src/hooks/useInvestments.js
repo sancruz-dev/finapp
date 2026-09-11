@@ -42,5 +42,15 @@ export function useInvestments() {
     fetch();
   };
 
-  return { investments, summary, loading, add, update, remove, addMovement, refresh: fetch };
+  const updateMovement = async (id, movementId, data) => {
+    await investmentService.updateMovement(id, movementId, data);
+    fetch();
+  };
+
+  const removeMovement = async (id, movementId) => {
+    await investmentService.removeMovement(id, movementId);
+    fetch();
+  };
+
+  return { investments, summary, loading, add, update, remove, addMovement, updateMovement, removeMovement, refresh: fetch };
 }

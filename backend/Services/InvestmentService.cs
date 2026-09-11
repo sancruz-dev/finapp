@@ -131,6 +131,64 @@ public class InvestmentService(DbConnectionFactory db, InvestmentCalculationServ
         return (await ToResponseAsync(inv, movements), null);
     }
 
+    /// <summary>Edita um aporte/resgate existente. Retorna null se o ativo/movimentação não existe/não é do usuário,
+    /// ou uma mensagem de erro se a alteração deixaria o saldo do ativo negativo.</summary>
+    public async Task<(InvestmentResponse? Result, string? Error)> UpdateMovementAsync(int investmentId, int movementId, int userId, CreateMovementRequest req)
+    {
+        using var conn = db.Create();
+        var inv = await conn.QueryFirstOrDefaultAsync<Investment>(
+            "SELECT * FROM investments WHERE id = @Id AND user_id = @UserId", new { Id = investmentId, UserId = userId });
+        if (inv is null) return (null, null);
+
+        var movements = (await conn.QueryAsync<InvestmentMovement>(
+            "SELECT * FROM investment_movements WHERE investment_id = @Id", new { Id = investmentId })).ToList();
+        var target = movements.FirstOrDefault(m => m.Id == movementId);
+        if (target is null) return (null, null);
+
+        var candidate = movements
+            .Select(m => m.Id == movementId
+                ? new InvestmentMovement { Id = m.Id, InvestmentId = investmentId, Type = req.Type, Amount = req.Amount, MovementDate = DateTime.Parse(req.Date) }
+                : m)
+            .ToList();
+
+        var (candidateGross, _, _) = await calculator.CalculateAsync(inv, candidate);
+        if (candidateGross < 0)
+            return (null, "Essa alteração deixaria o saldo do ativo negativo.");
+
+        await conn.ExecuteAsync(@"
+            UPDATE investment_movements SET type = @Type, amount = @Amount, movement_date = @MovementDate
+            WHERE id = @Id AND investment_id = @InvestmentId",
+            new { req.Type, req.Amount, MovementDate = req.Date, Id = movementId, InvestmentId = investmentId });
+
+        movements = (await conn.QueryAsync<InvestmentMovement>(
+            "SELECT * FROM investment_movements WHERE investment_id = @Id", new { Id = investmentId })).ToList();
+        return (await ToResponseAsync(inv, movements), null);
+    }
+
+    /// <summary>Remove um aporte/resgate existente. Retorna (false, null) se o ativo/movimentação não existe/não é do
+    /// usuário, ou (false, mensagem) se a remoção deixaria o saldo do ativo negativo.</summary>
+    public async Task<(bool Success, string? Error)> DeleteMovementAsync(int investmentId, int movementId, int userId)
+    {
+        using var conn = db.Create();
+        var inv = await conn.QueryFirstOrDefaultAsync<Investment>(
+            "SELECT * FROM investments WHERE id = @Id AND user_id = @UserId", new { Id = investmentId, UserId = userId });
+        if (inv is null) return (false, null);
+
+        var movements = (await conn.QueryAsync<InvestmentMovement>(
+            "SELECT * FROM investment_movements WHERE investment_id = @Id", new { Id = investmentId })).ToList();
+        if (!movements.Any(m => m.Id == movementId)) return (false, null);
+
+        var candidate = movements.Where(m => m.Id != movementId).ToList();
+        var (candidateGross, _, _) = await calculator.CalculateAsync(inv, candidate);
+        if (candidateGross < 0)
+            return (false, "Remover essa movimentação deixaria o saldo do ativo negativo.");
+
+        await conn.ExecuteAsync(
+            "DELETE FROM investment_movements WHERE id = @Id AND investment_id = @InvestmentId",
+            new { Id = movementId, InvestmentId = investmentId });
+        return (true, null);
+    }
+
     private async Task<InvestmentResponse> ToResponseAsync(Investment inv, List<InvestmentMovement> movements)
     {
         var (gross, net, netContributed) = await calculator.CalculateAsync(inv, movements);

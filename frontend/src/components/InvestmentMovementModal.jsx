@@ -18,10 +18,10 @@ const TYPE_CONFIG = {
   RESGATE: { label: '− Resgate', border: '#ef4444', bg: '#fef2f2', color: '#ef4444' },
 };
 
-export default function InvestmentMovementModal({ investment, onSave, onClose }) {
-  const [type, setType] = useState('APORTE');
-  const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
+export default function InvestmentMovementModal({ investment, initial, onSave, onClose }) {
+  const [type, setType] = useState(initial?.type || 'APORTE');
+  const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '');
+  const [date, setDate] = useState(initial?.date ? dayjs(initial.date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -50,7 +50,7 @@ export default function InvestmentMovementModal({ investment, onSave, onClose })
     <div style={overlay} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={box}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-          <h3 style={{ margin: 0 }}>Aporte / Resgate</h3>
+          <h3 style={{ margin: 0 }}>{initial ? 'Editar movimentação' : 'Aporte / Resgate'}</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer', color: 'var(--text-primary)' }}>✕</button>
         </div>
         <p style={{ margin: '0 0 1.25rem', fontSize: '0.85rem', color: 'var(--text-faint)' }}>{investment.institution}</p>
@@ -98,7 +98,7 @@ export default function InvestmentMovementModal({ investment, onSave, onClose })
 
           <button type="submit" disabled={loading}
             style={{ width: '100%', padding: '12px', background: TYPE_CONFIG[type].color, color: '#fff', border: 'none', borderRadius: 8, cursor: loading ? 'default' : 'pointer', fontWeight: 700, fontSize: '1rem', opacity: loading ? 0.7 : 1 }}>
-            {loading ? 'Salvando…' : `Confirmar ${type === 'APORTE' ? 'aporte' : 'resgate'}`}
+            {loading ? 'Salvando…' : initial ? 'Salvar alterações' : `Confirmar ${type === 'APORTE' ? 'aporte' : 'resgate'}`}
           </button>
         </form>
       </div>

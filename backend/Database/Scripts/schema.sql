@@ -123,6 +123,7 @@ CREATE TABLE `investment_movements` (
   `type` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
   `amount` decimal(12,2) NOT NULL,
   `movement_date` date NOT NULL,
+  `reason` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `investment_movements_investment_id` (`investment_id`),

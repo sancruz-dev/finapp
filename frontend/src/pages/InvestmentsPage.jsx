@@ -132,7 +132,10 @@ export default function InvestmentsPage() {
                                 <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: 'var(--text-faint)' }}>Nenhum aporte ou resgate além da aplicação inicial.</p>
                               ) : inv.movements.map(m => (
                                 <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', padding: '4px 0', color: 'var(--text-secondary)' }}>
-                                  <span>{dayjs(m.date).format('DD/MM/YYYY')} — {MOVEMENT_LABELS[m.type].label}</span>
+                                  <span>
+                                    {dayjs(m.date).format('DD/MM/YYYY')} — {MOVEMENT_LABELS[m.type].label}
+                                    {m.reason && <span style={{ color: 'var(--text-faint)' }}> ({m.reason})</span>}
+                                  </span>
                                   <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                     <span style={{ fontWeight: 600, color: MOVEMENT_LABELS[m.type].color }}>{MOVEMENT_LABELS[m.type].sign} {fmt(m.amount)}</span>
                                     <button onClick={() => setMovementModal({ investment: inv, movement: m })} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem' }} title="Editar movimentação">✏️</button>

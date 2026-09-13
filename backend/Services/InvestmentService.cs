@@ -122,9 +122,9 @@ public class InvestmentService(DbConnectionFactory db, InvestmentCalculationServ
         }
 
         await conn.ExecuteAsync(@"
-            INSERT INTO investment_movements (investment_id, type, amount, movement_date)
-            VALUES (@InvestmentId, @Type, @Amount, @MovementDate)",
-            new { InvestmentId = investmentId, req.Type, req.Amount, MovementDate = req.Date });
+            INSERT INTO investment_movements (investment_id, type, amount, movement_date, reason)
+            VALUES (@InvestmentId, @Type, @Amount, @MovementDate, @Reason)",
+            new { InvestmentId = investmentId, req.Type, req.Amount, MovementDate = req.Date, req.Reason });
 
         movements = (await conn.QueryAsync<InvestmentMovement>(
             "SELECT * FROM investment_movements WHERE investment_id = @Id", new { Id = investmentId })).ToList();
@@ -147,7 +147,7 @@ public class InvestmentService(DbConnectionFactory db, InvestmentCalculationServ
 
         var candidate = movements
             .Select(m => m.Id == movementId
-                ? new InvestmentMovement { Id = m.Id, InvestmentId = investmentId, Type = req.Type, Amount = req.Amount, MovementDate = DateTime.Parse(req.Date) }
+                ? new InvestmentMovement { Id = m.Id, InvestmentId = investmentId, Type = req.Type, Amount = req.Amount, MovementDate = DateTime.Parse(req.Date), Reason = req.Reason }
                 : m)
             .ToList();
 
@@ -156,9 +156,9 @@ public class InvestmentService(DbConnectionFactory db, InvestmentCalculationServ
             return (null, "Essa alteração deixaria o saldo do ativo negativo.");
 
         await conn.ExecuteAsync(@"
-            UPDATE investment_movements SET type = @Type, amount = @Amount, movement_date = @MovementDate
+            UPDATE investment_movements SET type = @Type, amount = @Amount, movement_date = @MovementDate, reason = @Reason
             WHERE id = @Id AND investment_id = @InvestmentId",
-            new { req.Type, req.Amount, MovementDate = req.Date, Id = movementId, InvestmentId = investmentId });
+            new { req.Type, req.Amount, MovementDate = req.Date, req.Reason, Id = movementId, InvestmentId = investmentId });
 
         movements = (await conn.QueryAsync<InvestmentMovement>(
             "SELECT * FROM investment_movements WHERE investment_id = @Id", new { Id = investmentId })).ToList();
@@ -196,6 +196,6 @@ public class InvestmentService(DbConnectionFactory db, InvestmentCalculationServ
             inv.Id, inv.Institution, inv.AssetType, inv.Indexer, inv.IndexerRate,
             inv.PrincipalAmount, inv.AppliedAt, inv.MaturityAt, gross, net, netContributed,
             movements.OrderBy(m => m.MovementDate).ThenBy(m => m.Id)
-                .Select(m => new MovementResponse(m.Id, m.Type, m.Amount, m.MovementDate)).ToList());
+                .Select(m => new MovementResponse(m.Id, m.Type, m.Amount, m.MovementDate, m.Reason)).ToList());
     }
 }

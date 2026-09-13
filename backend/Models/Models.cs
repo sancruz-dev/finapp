@@ -81,6 +81,7 @@ public class InvestmentMovement
     public string Type { get; set; } = "";   // APORTE | RESGATE
     public decimal Amount { get; set; }
     public DateTime MovementDate { get; set; }
+    public string? Reason { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -106,13 +107,15 @@ public record UpdateInvestmentRequest(
 public record CreateMovementRequest(
     string Type,
     decimal Amount,
-    string Date);
+    string Date,
+    string? Reason);
 
 public record MovementResponse(
     int Id,
     string Type,
     decimal Amount,
-    DateTime Date);
+    DateTime Date,
+    string? Reason);
 
 public record InvestmentResponse(
     int Id,

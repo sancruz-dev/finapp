@@ -22,6 +22,7 @@ export default function InvestmentMovementModal({ investment, initial, onSave, o
   const [type, setType] = useState(initial?.type || 'APORTE');
   const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '');
   const [date, setDate] = useState(initial?.date ? dayjs(initial.date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'));
+  const [reason, setReason] = useState(initial?.reason || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -30,7 +31,7 @@ export default function InvestmentMovementModal({ investment, initial, onSave, o
     setError('');
     setLoading(true);
     try {
-      await onSave({ type, amount: parseFloat(amount), date });
+      await onSave({ type, amount: parseFloat(amount), date, reason: reason.trim() || null });
       onClose();
     } catch (err) {
       setError(err.response?.data?.error || 'Erro ao registrar a movimentação.');
@@ -87,6 +88,13 @@ export default function InvestmentMovementModal({ investment, initial, onSave, o
             <Field label="Data">
               <input type="date" required value={date}
                 onChange={e => setDate(e.target.value)} style={fieldStyle} />
+            </Field>
+          </div>
+
+          <div style={row}>
+            <Field label="Motivo (opcional)">
+              <input type="text" placeholder="Ex: 13º salário, emergência..." value={reason}
+                onChange={e => setReason(e.target.value)} style={fieldStyle} maxLength={255} />
             </Field>
           </div>
 

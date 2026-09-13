@@ -5,3 +5,5 @@ obj/
 .env.*
 !.env.example
 Database/
+# Migrations/ (scripts do DbUp) NAO deve ser ignorado - precisa entrar no
+# build context para ser compilado como EmbeddedResource.

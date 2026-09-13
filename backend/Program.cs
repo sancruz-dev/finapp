@@ -75,7 +75,8 @@ var migrationsConnectionString =
     $"Port={Environment.GetEnvironmentVariable("DB_PORT") ?? "3306"};" +
     $"Database={Environment.GetEnvironmentVariable("DB_NAME") ?? "finapp"};" +
     $"Uid={Environment.GetEnvironmentVariable("DB_USER") ?? "root"};" +
-    $"Pwd={Environment.GetEnvironmentVariable("DB_PASSWORD") ?? ""};CharSet=utf8mb4;";
+    $"Pwd={Environment.GetEnvironmentVariable("DB_PASSWORD") ?? ""};CharSet=utf8mb4;" +
+    "AllowUserVariables=true;";
 
 var upgrader = DeployChanges.To
     .MySqlDatabase(migrationsConnectionString)

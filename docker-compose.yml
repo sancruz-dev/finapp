@@ -65,3 +65,4 @@ networks:
 
 volumes:
   mysql_data:
+    name: finapp_mysql_data

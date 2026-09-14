@@ -8,7 +8,8 @@ public class TransactionService(DbConnectionFactory db, MerchantNormalizerServic
 {
     // Seleciona colunas explicitamente para evitar colisão entre t.* e aliases do JOIN
     private const string SelectCols = @"
-        t.id, t.user_id, t.category_id, t.subcategory_id, t.type, t.amount, t.description, t.date, t.method, t.installment, t.late_processing,
+        t.id, t.user_id, t.category_id, t.subcategory_id, t.type, t.amount, t.description, t.date, t.method, t.installment,
+        CAST(t.installment_group_id AS CHAR(36)) AS installment_group_id, t.late_processing,
         CASE WHEN t.fixed = 'S' THEN 1 ELSE 0 END AS fixed,
         t.notes, t.details,
         t.created_at, t.updated_at,
@@ -71,25 +72,28 @@ public class TransactionService(DbConnectionFactory db, MerchantNormalizerServic
     {
         using var conn = db.Create();
 
-        // Transação parcelada: a data informada vira o início da parcela 1, e as demais
-        // (2..N) são clonadas automaticamente para os meses seguintes.
-        var total = InstallmentHelper.ParseTotal(req.Installment);
-        var installmentsToCreate = total is > 1 ? total.Value : 1;
+        // Transação parcelada: a data informada vira o início da parcela indicada pelo usuário
+        // (ex.: "2/5"), e as demais (current+1..total) são clonadas automaticamente para os
+        // meses seguintes — a numeração nunca reinicia em 1.
+        var parsed = InstallmentHelper.ParseCurrentAndTotal(req.Installment);
+        var startInstallment = parsed?.Current ?? 1;
+        var totalInstallments = parsed?.Total ?? 1;
         DateTime.TryParse(req.Date, out var baseDate);
+        var groupId = totalInstallments > 1 ? Guid.NewGuid().ToString() : null;
 
         var firstId = 0;
-        for (var i = 1; i <= installmentsToCreate; i++)
+        for (var i = startInstallment; i <= totalInstallments; i++)
         {
-            var date = installmentsToCreate > 1
-                ? baseDate.AddMonths(i - 1).ToString("yyyy-MM-dd")
+            var date = totalInstallments > 1
+                ? baseDate.AddMonths(i - startInstallment).ToString("yyyy-MM-dd")
                 : req.Date;
-            var installment = installmentsToCreate > 1
-                ? InstallmentHelper.Label(i, installmentsToCreate)
+            var installment = totalInstallments > 1
+                ? InstallmentHelper.Label(i, totalInstallments)
                 : req.Installment;
 
             var id = await conn.ExecuteScalarAsync<int>(@"
-                INSERT INTO transactions (user_id, type, amount, description, date, category_id, subcategory_id, notes, details, method, installment, late_processing, fixed)
-                VALUES (@UserId, @Type, @Amount, @Description, @Date, @CategoryId, @SubcategoryId, @Notes, @Details, @Method, @Installment, @LateProcessing, @Fixed);
+                INSERT INTO transactions (user_id, type, amount, description, date, category_id, subcategory_id, notes, details, method, installment, installment_group_id, late_processing, fixed)
+                VALUES (@UserId, @Type, @Amount, @Description, @Date, @CategoryId, @SubcategoryId, @Notes, @Details, @Method, @Installment, @InstallmentGroupId, @LateProcessing, @Fixed);
                 SELECT LAST_INSERT_ID();",
                 new
                 {
@@ -104,11 +108,12 @@ public class TransactionService(DbConnectionFactory db, MerchantNormalizerServic
                     Details = req.Details,
                     Method = req.Method,
                     Installment = installment,
+                    InstallmentGroupId = groupId,
                     req.LateProcessing,
                     Fixed = req.Fixed ? "S" : "N",
                 });
 
-            if (i == 1) firstId = id;
+            if (i == startInstallment) firstId = id;
 
             // ── Normalização de comerciante (ML) ──────────────────────────────
             if (!string.IsNullOrWhiteSpace(req.Description))
@@ -161,9 +166,27 @@ public class TransactionService(DbConnectionFactory db, MerchantNormalizerServic
         return rows > 0;
     }
 
-    public async Task<bool> DeleteAsync(int id, int userId)
+    public async Task<bool> DeleteAsync(int id, int userId, bool allInstallments = false)
     {
         using var conn = db.Create();
+
+        if (allInstallments)
+        {
+            var groupId = await conn.ExecuteScalarAsync<string?>(
+                "SELECT CAST(installment_group_id AS CHAR(36)) FROM transactions WHERE id = @Id AND user_id = @UserId",
+                new { Id = id, UserId = userId });
+
+            if (!string.IsNullOrEmpty(groupId))
+            {
+                var rowsGroup = await conn.ExecuteAsync(
+                    "DELETE FROM transactions WHERE installment_group_id = @GroupId AND user_id = @UserId",
+                    new { GroupId = groupId, UserId = userId });
+                return rowsGroup > 0;
+            }
+            // Série antiga sem installment_group_id: não há como identificar as demais
+            // parcelas com segurança, então cai para apagar só esta transação.
+        }
+
         var rows = await conn.ExecuteAsync(
             "DELETE FROM transactions WHERE id = @Id AND user_id = @UserId",
             new { Id = id, UserId = userId });

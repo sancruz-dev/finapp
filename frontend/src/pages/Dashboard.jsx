@@ -101,7 +101,27 @@ export default function Dashboard() {
     setShowModal(false);
   };
   const handleEdit = (tx) => { setEditing(tx); setShowModal(true); };
-  const handleDelete = async (id) => { if (window.confirm('Remover esta transação?')) await remove(id); };
+
+  const INSTALLMENT_RE = /(\d{1,2})\s*(?:\/|de)\s*(\d{1,2})/i;
+  const handleDelete = async (tx) => {
+    const m = tx.installment ? tx.installment.match(INSTALLMENT_RE) : null;
+    const isInstallment = m && parseInt(m[2], 10) > 1;
+
+    if (!isInstallment) {
+      if (window.confirm('Remover esta transação?')) await remove(tx.id);
+      return;
+    }
+
+    const deleteAll = window.confirm(
+      'Esta transação faz parte de uma compra parcelada.\n\n' +
+      'Clique OK para apagar TODAS as parcelas desta série, ou Cancelar para apagar apenas esta parcela.'
+    );
+    if (deleteAll) {
+      await remove(tx.id, 'all');
+    } else if (window.confirm('Remover apenas esta parcela?')) {
+      await remove(tx.id);
+    }
+  };
 
   const filtered = transactions.filter(tx => {
     if (filterType) {
@@ -527,7 +547,7 @@ export default function Dashboard() {
                     </span>
                     <button onClick={() => handleEdit(tx)} title="Editar"
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6366f1', fontSize: '1rem', padding: '2px 4px', borderRadius: 4 }}>✏️</button>
-                    <button onClick={() => handleDelete(tx.id)} title="Remover"
+                    <button onClick={() => handleDelete(tx)} title="Remover"
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '1rem', padding: '2px 4px', borderRadius: 4 }}>🗑️</button>
                   </div>
                 );

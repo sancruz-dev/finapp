@@ -53,8 +53,8 @@ export function useTransactions(period) {
     fetch();
   };
 
-  const remove = async (id) => {
-    await transactionService.remove(id);
+  const remove = async (id, scope) => {
+    await transactionService.remove(id, scope);
     fetch();
   };
 

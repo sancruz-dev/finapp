@@ -44,6 +44,7 @@ public class Transaction
     public DateTime Date { get; set; }
     public string? Method { get; set; }
     public string? Installment { get; set; }
+    public string? InstallmentGroupId { get; set; }
     public bool LateProcessing { get; set; }
     public bool Fixed { get; set; }
     public string? Notes { get; set; }

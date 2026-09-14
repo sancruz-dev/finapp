@@ -87,9 +87,10 @@ public class TransactionController(TransactionService svc, UserService userSvc) 
     }
 
     [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> Delete(int id, [FromQuery] string? scope)
     {
-        var ok = await svc.DeleteAsync(id, UserId);
+        var allInstallments = scope == "all";
+        var ok = await svc.DeleteAsync(id, UserId, allInstallments);
         if (!ok) return NotFound();
         return Ok(new { message = "Removido com sucesso" });
     }

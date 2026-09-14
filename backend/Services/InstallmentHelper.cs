@@ -20,5 +20,19 @@ public static class InstallmentHelper
         return total > 1 ? total : null;
     }
 
+    /// <summary>Retorna a parcela atual (X) e o total (Y) informados (ex.: "2/5" -&gt; (2, 5)), se houver mais de 1 parcela.</summary>
+    public static (int Current, int Total)? ParseCurrentAndTotal(string? installment)
+    {
+        if (string.IsNullOrWhiteSpace(installment)) return null;
+        var m = TotalRegex.Match(installment);
+        if (!m.Success) return null;
+        var current = int.Parse(m.Groups[1].Value);
+        var total = int.Parse(m.Groups[2].Value);
+        if (total <= 1) return null;
+        if (current < 1) current = 1;
+        if (current > total) current = total;
+        return (current, total);
+    }
+
     public static string Label(int current, int total) => $"Parcela {current}/{total}";
 }
